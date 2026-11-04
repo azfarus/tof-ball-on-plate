@@ -13,6 +13,7 @@ Weights & Biases logging is on by default ([wandb] in control.toml, --no-wandb t
 """
 import argparse
 import json
+import os
 import time
 import tomllib
 
@@ -58,6 +59,16 @@ class EpisodeStats(BaseCallback):
         return True
 
 
+def load_dotenv(path):
+    """KEY=VALUE lines from the git-ignored .env (e.g. WANDB_API_KEY) into os.environ."""
+    if not path.exists():
+        return
+    for line in path.read_text().splitlines():
+        k, sep, v = line.partition("=")
+        if sep and not k.strip().startswith("#") and v.strip():
+            os.environ.setdefault(k.strip(), v.strip().strip('"\''))
+
+
 def start_wandb(wb, out, args, overrides, ctrl):
     """W&B run that mirrors the tensorboard scalars (SB3 logs to tensorboard)."""
     import wandb
@@ -100,6 +111,7 @@ def main():
 
     callbacks = [EpisodeStats()]
     if args.wandb:
+        load_dotenv(config.ROOT / ".env")
         callbacks.append(start_wandb(ctrl["wandb"], out, args, overrides, ctrl))
 
     venv = make_vec_env(BallOnPlateEnv, n_envs=args.n_envs, seed=args.seed,

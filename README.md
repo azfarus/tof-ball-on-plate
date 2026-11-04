@@ -27,11 +27,13 @@ With pip instead of uv: `python3.13 -m venv .venv && .venv/bin/pip install -r re
 
 ## 2. Weights & Biases (training dashboard)
 
-Log in once; the key is stored in `~/.netrc`:
+Put your API key (https://wandb.ai/authorize) in `.env` in the repo root. That file is git-ignored; `.env.example` is the template:
 
 ```bash
-.venv/bin/wandb login
+cp .env.example .env      # then edit: WANDB_API_KEY=<your key>
 ```
+
+`control/train.py` loads `.env` at start. Alternatively, `.venv/bin/wandb login` stores the key in `~/.netrc`.
 
 Every `control/train.py` run then logs to the W&B project `ball-on-plate-tof`, set in `[wandb]` in `config/control.toml`. Each run logs:
 - SB3 scalars: `rollout/ep_rew_mean`, `train/*` losses, fps;

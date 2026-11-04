@@ -8,7 +8,7 @@ All Python runs from the project venv (`.venv`, made with uv; deps in `requireme
 
 ```bash
 uv venv .venv -p 3.13 && uv pip install --python .venv/bin/python -r requirements.txt   # includes -e .
-.venv/bin/wandb login                               # once; train.py logs to W&B ([wandb] in control.toml, --no-wandb / --wandb-mode offline)
+# W&B key: WANDB_API_KEY in git-ignored .env (template .env.example); train.py logs to W&B ([wandb] in control.toml, --no-wandb / --wandb-mode offline)
 .venv/bin/python tools/calibrate.py                 # sanity checks: ToF vs datasheet, rolling physics, servo step times
 .venv/bin/python tools/run_scenarios.py             # scripted scenarios, interference on + off -> sim/out/
 .venv/bin/python tools/run_scenarios.py --scenario circle --interference on --view

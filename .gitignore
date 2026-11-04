@@ -8,3 +8,4 @@ MUJOCO_LOG.TXT
 # per-run traces and readings are large and regenerable (tools/run_scenarios.py, tools/ablate.py)
 sim/out/**/*_trace.csv
 sim/out/**/*_readings.csv
+.env
