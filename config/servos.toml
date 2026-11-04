@@ -1,0 +1,235 @@
+# Hobby PWM servo library. Every positional servo on store.roboticsbd.com/133-servo-motor
+# (fetched 2026-11-04). 360 deg continuous-rotation variants are left out: their pulse
+# sets speed, not angle, so they cannot hold a plate pose.
+#
+# Listed values (from the product pages):
+#   kind          "analog" or "digital"
+#   travel_deg    angle covered by the pulse range
+#   volts         supply voltages the speed/torque are listed at
+#   sec_per_60    no-load speed at each voltage (s per 60 deg)
+#   torque_kgcm   stall torque at each voltage
+#   deadband_us   pulse change the servo ignores
+#   mass_g
+#   feedback      "none" or "pot" (4th wire with the potentiometer voltage)
+# Every model takes 500-2500 us pulses; 1500 us is the centre (servo angle 0).
+# Per-model keys can override anything in [default]. "assumed" lists the keys
+# that are not on the listing.
+
+[default]
+pulse_min_us = 500.0
+pulse_max_us = 2500.0
+pulse_centre_us = 1500.0
+max_frame_hz = 50.0         # fastest PWM frame rate the servo accepts
+deadband_us = 5.0
+prop_band_deg = 4.0         # error that gives full motor drive (assumed: analog P loop)
+backlash_deg = 0.5          # gear play, total (assumed: metal gears)
+mech_time_const_s = 0.02    # no-load time to ~63% of top speed (assumed)
+friction_frac = 0.02        # gear friction as a fraction of stall torque (assumed)
+feedback = "none"
+feedback_noise_deg = 0.5    # 1 sigma, pot read through a 10-bit ADC (assumed)
+
+[SG90]
+kind = "analog"
+travel_deg = 180.0
+volts = [4.8, 6.6]
+sec_per_60 = [0.10, 0.10]   # only 4.8 V listed
+torque_kgcm = [1.2, 1.6]
+mass_g = 9.0
+deadband_us = 10.0
+backlash_deg = 1.0          # nylon gears
+assumed = ["deadband_us", "sec_per_60@6.6"]
+
+[SG92R]
+kind = "analog"
+travel_deg = 180.0
+volts = [4.8]
+sec_per_60 = [0.10]         # listing value garbled
+torque_kgcm = [2.5]
+mass_g = 9.0
+deadband_us = 10.0
+backlash_deg = 1.0
+assumed = ["sec_per_60", "deadband_us"]
+
+[MG995]
+kind = "analog"
+travel_deg = 180.0
+volts = [4.8, 6.6]
+sec_per_60 = [0.20, 0.16]
+torque_kgcm = [10.0, 12.0]
+mass_g = 55.0
+deadband_us = 1.0
+backlash_deg = 0.8          # semi-metal gears
+assumed = []
+
+[MG996R]
+kind = "analog"
+travel_deg = 180.0
+volts = [4.8, 6.6]
+sec_per_60 = [0.19, 0.15]
+torque_kgcm = [9.4, 11.0]
+mass_g = 55.0
+deadband_us = 1.0
+assumed = []
+
+[MG996R_270]
+kind = "analog"
+travel_deg = 270.0
+volts = [4.8, 6.6]
+sec_per_60 = [0.19, 0.15]
+torque_kgcm = [9.4, 11.0]
+mass_g = 55.0
+deadband_us = 1.0
+assumed = []
+
+[MG996R_FB]                 # Analog Feedback MG996R
+kind = "analog"
+travel_deg = 180.0
+volts = [4.8, 6.6]
+sec_per_60 = [0.19, 0.15]
+torque_kgcm = [9.4, 11.0]
+mass_g = 55.0
+deadband_us = 1.0
+feedback = "pot"
+assumed = []
+
+[MG945]
+kind = "digital"
+travel_deg = 180.0
+volts = [4.8, 6.0]
+sec_per_60 = [0.17, 0.14]   # not listed
+torque_kgcm = [10.0, 12.0]
+mass_g = 55.0
+deadband_us = 1.0
+prop_band_deg = 1.5
+assumed = ["sec_per_60", "mass_g"]
+
+[DS3218]
+kind = "digital"
+travel_deg = 270.0
+volts = [5.0, 6.8]
+sec_per_60 = [0.16, 0.14]
+torque_kgcm = [19.0, 21.5]
+mass_g = 60.0
+deadband_us = 3.0
+max_frame_hz = 333.0        # "working frequency 1520 us / 333 Hz"
+prop_band_deg = 1.5
+assumed = []
+
+[TD8120MG]
+kind = "digital"
+travel_deg = 180.0
+volts = [4.8, 7.2]
+sec_per_60 = [0.18, 0.14]
+torque_kgcm = [20.5, 22.8]
+mass_g = 56.0
+deadband_us = 5.0
+prop_band_deg = 1.5
+assumed = []
+
+[TD8120MG_270]
+kind = "digital"
+travel_deg = 270.0
+volts = [4.8, 7.2]
+sec_per_60 = [0.18, 0.14]
+torque_kgcm = [20.5, 22.8]
+mass_g = 56.0
+deadband_us = 5.0
+prop_band_deg = 1.5
+assumed = []
+
+[TD8135MG]
+kind = "digital"
+travel_deg = 180.0
+volts = [4.8, 8.4]
+sec_per_60 = [0.32, 0.22]
+torque_kgcm = [32.7, 35.2]
+mass_g = 56.0
+prop_band_deg = 1.5
+assumed = ["deadband_us"]
+
+[TD8135MG_270]
+kind = "digital"
+travel_deg = 270.0
+volts = [4.8, 8.4]
+sec_per_60 = [0.32, 0.22]
+torque_kgcm = [32.7, 35.2]
+mass_g = 56.0
+prop_band_deg = 1.5
+assumed = ["deadband_us"]
+
+[LDX218]
+kind = "digital"
+travel_deg = 180.0
+volts = [6.0, 7.4]
+sec_per_60 = [0.16, 0.16]   # only 7.4 V listed
+torque_kgcm = [15.0, 17.0]
+mass_g = 56.0
+deadband_us = 3.3           # "deadband / accuracy 0.3 deg"
+prop_band_deg = 1.5
+assumed = ["sec_per_60@6.0"]
+
+[LDX227]
+kind = "digital"
+travel_deg = 270.0
+volts = [6.0, 7.4]
+sec_per_60 = [0.16, 0.16]
+torque_kgcm = [15.0, 17.0]
+mass_g = 57.0
+deadband_us = 3.0           # "accuracy 0.4 deg"
+prop_band_deg = 1.5
+assumed = ["sec_per_60@6.0"]
+
+[MAG25]                     # 25 kg waterproof digital servo, 12-bit magnetic encoder, 360 deg absolute
+kind = "digital"
+travel_deg = 360.0
+volts = [6.0, 7.4]
+sec_per_60 = [0.185, 0.151]
+torque_kgcm = [20.5, 25.0]
+mass_g = 80.0
+deadband_us = 1.0
+prop_band_deg = 1.0
+backlash_deg = 0.3          # steel gears
+assumed = ["mass_g", "deadband_us"]
+
+[DFR_CLUTCH_9G]             # DFRobot 9g 180 deg clutch servo
+kind = "analog"
+travel_deg = 180.0
+volts = [4.8, 6.0]
+sec_per_60 = [0.12, 0.10]   # not listed
+torque_kgcm = [1.6, 2.0]
+mass_g = 9.0
+deadband_us = 10.0
+backlash_deg = 1.0
+assumed = ["sec_per_60", "mass_g", "deadband_us"]
+
+[DFR_CLUTCH_9G_300]         # DFRobot 9g 300 deg clutch servo
+kind = "analog"
+travel_deg = 300.0
+volts = [4.8, 6.0]
+sec_per_60 = [0.12, 0.10]
+torque_kgcm = [1.0, 1.2]
+mass_g = 9.0
+deadband_us = 10.0
+backlash_deg = 1.0
+assumed = ["sec_per_60", "mass_g", "deadband_us"]
+
+[DFR_CLUTCH_2KG]
+kind = "analog"
+travel_deg = 180.0
+volts = [4.8, 6.0]
+sec_per_60 = [0.12, 0.10]
+torque_kgcm = [1.6, 2.0]
+mass_g = 12.0
+deadband_us = 10.0
+backlash_deg = 1.0
+assumed = ["sec_per_60", "mass_g", "deadband_us"]
+
+[DFR_CLUTCH_6KG]
+kind = "analog"
+travel_deg = 180.0
+volts = [6.0]
+sec_per_60 = [0.16]
+torque_kgcm = [6.0]
+mass_g = 40.0
+deadband_us = 5.0
+assumed = ["sec_per_60", "mass_g", "deadband_us"]

@@ -1,0 +1,156 @@
+# Test runs. tilt_deg = [about x, about y] at t = 0.
+# motion: "hold", "sine" (tilt0 + amp sin), "circle" (amp around both axes),
+#   "random" (smooth zero-mean random tilt around tilt_deg, peak amp_deg,
+#   freq_hz = max component freq, 1 s ramp-in).
+# Optional ball forces (unknown to tracker): kicks_per_s, kick_force_n, kick_ms,
+#   push_sigma_n + push_tau_s (slow random push). ball_z_m = drop height.
+#   motion_delay_s holds tilt_deg until the motion starts.
+#   heave_amp_m (+ heave_freq_hz for non-random motion): plate up/down, servo3 only.
+#   0.03 N for 20 ms ~ 0.2 m/s;
+#   0.0005 N push ~ 0.19 m/s^2, like a 1 deg tilt on the 2.7 g ball.
+
+duration_s = 10.0
+seed = 1
+
+[[scenario]]
+name = "flat_push"
+tilt_deg = [0.0, 0.0]
+motion = "hold"
+ball_xy_m = [-0.06, -0.02]
+ball_v_mps = [0.25, 0.12]
+
+[[scenario]]
+name = "hold_x2"
+tilt_deg = [2.0, 0.0]
+motion = "hold"
+ball_xy_m = [0.0, 0.0]
+ball_v_mps = [0.0, 0.0]
+
+[[scenario]]
+name = "hold_diag3"
+tilt_deg = [3.0, -3.0]
+motion = "hold"
+ball_xy_m = [-0.03, 0.03]
+ball_v_mps = [0.0, 0.0]
+
+[[scenario]]
+name = "circle"
+tilt_deg = [1.5, 0.0]
+motion = "circle"
+amp_deg = [1.5, 1.5]
+freq_hz = [0.6, 0.6]
+ball_xy_m = [0.05, 0.0]
+ball_v_mps = [0.0, 0.15]
+
+[[scenario]]
+name = "wobble"
+tilt_deg = [4.0, -3.0]
+motion = "sine"
+amp_deg = [3.0, 2.0]
+freq_hz = [0.7, 0.45]
+ball_xy_m = [0.0, 0.0]
+ball_v_mps = [0.0, 0.0]
+
+# --- Steep tilts and strong random forces ---
+
+[[scenario]]
+name = "kicked_flat"
+tilt_deg = [0.0, 0.0]
+motion = "hold"
+ball_xy_m = [0.0, 0.0]
+ball_v_mps = [0.0, 0.0]
+kicks_per_s = 3.0
+kick_force_n = 0.05
+kick_ms = 20.0
+push_sigma_n = 0.0012
+push_tau_s = 0.3
+
+[[scenario]]
+name = "steep_hold_10"
+tilt_deg = [10.0, 5.0]
+motion = "hold"
+ball_xy_m = [0.05, 0.05]
+ball_v_mps = [0.0, 0.0]
+kicks_per_s = 2.5
+kick_force_n = 0.07
+kick_ms = 20.0
+push_sigma_n = 0.0012
+push_tau_s = 0.3
+
+[[scenario]]
+name = "big_circle"
+tilt_deg = [6.0, 0.0]
+motion = "circle"
+amp_deg = [6.0, 6.0]
+freq_hz = [0.8, 0.8]
+ball_xy_m = [0.05, 0.0]
+ball_v_mps = [0.0, 0.2]
+kicks_per_s = 2.0
+kick_force_n = 0.04
+kick_ms = 20.0
+push_sigma_n = 0.0008
+push_tau_s = 0.3
+
+[[scenario]]
+name = "random_tilt"
+tilt_deg = [0.0, 0.0]
+motion = "random"
+amp_deg = [10.0, 10.0]
+freq_hz = 1.2
+ball_xy_m = [0.0, 0.0]
+ball_v_mps = [0.0, 0.0]
+kicks_per_s = 2.0
+kick_force_n = 0.05
+kick_ms = 20.0
+push_sigma_n = 0.0012
+push_tau_s = 0.3
+
+[[scenario]]
+name = "random_tilt_fast"
+tilt_deg = [2.0, -2.0]
+motion = "random"
+amp_deg = [12.0, 12.0]
+freq_hz = 2.5
+ball_xy_m = [0.0, 0.0]
+ball_v_mps = [0.0, 0.0]
+kicks_per_s = 3.0
+kick_force_n = 0.06
+kick_ms = 20.0
+push_sigma_n = 0.0015
+push_tau_s = 0.3
+
+# --- Drop: ball released 50 cm above the plate (centre height), lands, bounces.
+# On a 2 deg tilt it drifts ~10 cm per bounce and clears the rim, so release flat. ---
+
+[[scenario]]
+name = "drop_50cm"
+tilt_deg = [0.0, 0.0]        # flat at release; slow tilt starts the ball rolling after it settles
+motion = "sine"
+motion_delay_s = 4.5         # bounces last ~4 s at restitution 0.85
+amp_deg = [2.0, 1.5]
+freq_hz = [0.3, 0.2]
+ball_xy_m = [0.02, -0.01]
+ball_z_m = 0.5
+ball_v_mps = [0.0, 0.0]
+
+# --- 3-servo platform: smooth random tilt + heave, no forces (platform only) ---
+
+[[scenario]]
+name = "servo_smooth"
+tilt_deg = [0.0, 0.0]
+motion = "random"
+amp_deg = [8.0, 8.0]
+freq_hz = 0.6
+heave_amp_m = 0.006
+ball_xy_m = [0.0, 0.0]
+ball_v_mps = [0.0, 0.0]
+
+[[scenario]]
+name = "servo_brisk"
+tilt_deg = [0.0, 0.0]
+motion = "random"
+amp_deg = [12.0, 12.0]
+freq_hz = 1.5
+heave_amp_m = 0.010
+ball_xy_m = [0.0, 0.0]
+ball_v_mps = [0.0, 0.0]

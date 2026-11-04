@@ -1,0 +1,25 @@
+# 3-RRS plate support: 3 servo cranks on a base circle, push rods,
+# ball joints under the plate. DOF: roll, pitch, heave.
+#
+# Servo angle 0 = 1500 us pulse = crank horizontal = plate flat at neutral height.
+# Neutral pose: crank horizontal, rod vertical, so attach_radius = base_radius + crank.
+
+leg_angles_deg = [90.0, 210.0, 330.0]
+base_radius_m = 0.090      # servo axis distance from centre
+attach_radius_m = 0.120    # ball joint distance from plate centre
+crank_m = 0.030            # servo horn length
+rod_m = 0.080              # push rod length
+servo_height_m = 0.040     # servo axis above the base
+range_deg = 80.0           # mechanical crank travel either side of horizontal
+
+# Servos (specs in servos.toml)
+servo_model = "MG996R"
+supply_v = 6.0             # speed and torque are interpolated at this voltage
+
+# Host PWM generator
+servo_update_hz = 50.0     # frame rate; capped at the servo's max_frame_hz
+pwm_resolution_us = 1.0    # pulse step (PCA9685 at 50 Hz ~4.9 us, ESP32 LEDC ~0.3 us)
+trajectory_speed_rps = 0.0 # host-side speed limit on the sent angle, rad/s (0 = off)
+
+joint_solref = [0.002, 1.0]  # ball-joint equality stiffness
+lash_solref = [0.002, 1.0]   # gear backlash end stops

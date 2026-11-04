@@ -1,0 +1,19 @@
+# Live viewer (sim/run.py --view).
+
+speed = 0.25            # playback speed vs real time (0.25 = 4x slow motion)
+fps = 60                # viewer refresh, in sim time
+beam_length_m = 0.45    # drawn length of each beam
+line_width = 3.0
+cam_distance_m = 0.75
+cam_elevation_deg = -55
+cam_azimuth_deg = 90
+
+[colors]                # rgba per reading status
+accepted = [0.1, 0.9, 0.2, 0.9]
+init = [0.2, 0.8, 1.0, 0.9]
+gated = [1.0, 0.6, 0.0, 0.9]
+background = [0.5, 0.5, 0.5, 0.6]
+invalid = [0.9, 0.2, 0.2, 0.6]
+none = [1.0, 1.0, 1.0, 0.4]
+estimate = [1.0, 0.5, 0.0, 0.5]
+reading = [0.1, 0.9, 0.2, 1.0]

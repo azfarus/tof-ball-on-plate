@@ -1,0 +1,29 @@
+# ST VL53L4CD, datasheet DS13812 Rev 3.
+
+name = "VL53L4CD"
+wavelength_nm = 940
+timing_budget_ms = 10.0      # 100 Hz max ranging frequency
+max_range_m = 1.3
+
+# Field of view (Table 16): detection volume shrinks with distance.
+fov_full_deg_near = 22.0     # white 88% target at 100 mm
+fov_full_deg_far = 18.0      # white 88% target at 1000 mm
+fov_near_m = 0.1
+fov_far_m = 1.0
+foi_half_deg = 8.0           # VCSEL illumination, 16 deg full width at 1/e^2
+
+# Ray model
+n_rays = 300                 # rays per sub-sample over the detection cone
+bin_m = 0.002                # return histogram bin
+pulse_sigma_m = 0.020        # assumed return pulse width, in range units
+
+# Noise and validity (assumptions anchored to the datasheet)
+sigma_ref_m = 0.0025         # 1-sigma noise, white 88% full FoV at 200 mm, 33 ms
+ref_budget_ms = 33.0         # budget of the datasheet accuracy tables
+sigma_threshold_m = 0.015    # ULD driver default sigma threshold
+offset_sigma_m = 0.002       # residual per-unit offset after offset calibration
+ambient_frac = 0.0           # indoor, no IR (fraction of S_ref)
+ambient_span_m = 1.3         # range span that unsynced light spreads over
+
+peak_select = "strongest"    # "strongest" or "nearest"
+nearest_frac = 0.3           # for "nearest": min peak height vs strongest

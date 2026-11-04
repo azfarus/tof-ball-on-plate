@@ -1,0 +1,26 @@
+# Sensor mounting and scan motion.
+
+corners = [0, 1, 2, 3]   # fitted corners: 0 (-,-), 1 (+,-), 2 (+,+), 3 (-,+)
+
+mode = "continuous"      # "continuous" sweep or "step" (hold per reading)
+sector_deg = 90.0        # each corner covers the plate quadrant
+step_deg = 18.0          # one reading per 18 deg -> 5 readings per sweep
+phase_stagger = true     # offset sensors by a quarter sweep
+substep_ms = 2.5         # ray-cast sub-samples inside one reading
+
+mount_height_m = 0.020   # beam axis above plate top (ball equator)
+mount_inset_m = 0.008    # sensor centre inset from plate corner, each axis
+pitch_deg = 0.0          # beam elevation, + = up
+housing_radius_m = 0.006
+
+interference = true      # model other sensors' 940 nm light
+
+# Scan actuator. "ideal": beam yaw follows the triangle wave exactly.
+# "servo": each sensor sits on a hobby servo (servos.toml); yaw is the horn angle.
+# Servo angle 0 = 1500 us = beam on the corner bisector (quadrant centre).
+actuator = "servo"
+servo_model = "SG90"
+supply_v = 5.0
+servo_update_hz = 50.0   # host PWM frame rate; capped at the servo's max_frame_hz
+yaw_source = "measured"  # tracker bearing: "measured" (horn angle + feedback noise) or "commanded"
+rotor_mass_kg = 0.004    # sensor board + bracket on the horn

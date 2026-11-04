@@ -1,0 +1,18 @@
+# Plate, ball and physics. SI units (m, kg, s).
+
+size_m = 0.30            # square plate side
+thickness_m = 0.006
+rim_height_m = 0.025     # above ball radius so it cannot roll over; beams see it as background
+rim_width_m = 0.005
+ball_radius_m = 0.020    # 40 mm ping-pong ball
+ball_mass_kg = 0.0027
+ball_hollow = true       # thin shell: I = 2/3 m r^2
+friction = [0.6, 0.005, 0.00003]  # slide, torsion, rolling (m); ~0.0015 r
+timestep_s = 0.00025     # 4 kHz physics
+ball_solref = [0.01, 0.05]   # ball contact [timeconst s, damping ratio]: restitution 0.85, rolling within 1.5%
+
+[albedo]                 # diffuse reflectance at 940 nm
+ball = 0.85              # white ping-pong ball
+plate = 0.10             # matte black plate
+rim = 0.10
+housing = 0.05

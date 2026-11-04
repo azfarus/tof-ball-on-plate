@@ -1,0 +1,16 @@
+[project]
+name = "bop-env"
+version = "0.1.0"
+description = "Ball-on-plate with scanning ToF sensors: MuJoCo sim and Gymnasium env"
+requires-python = ">=3.11"
+dependencies = ["mujoco==3.17.0", "numpy", "gymnasium"]
+
+[project.optional-dependencies]
+train = ["torch", "stable-baselines3", "tensorboard", "wandb", "matplotlib"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["bop_env"]

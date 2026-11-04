@@ -1,0 +1,76 @@
+# Controllers and RL training (control/). Not read by the environment.
+
+[pid]                      # cascade: ball position -> wanted ball accel -> plate tilt -> IK -> servos
+kp = 6.0                   # 1/s^2
+kd = 3.5                   # 1/s
+ki = 0.5                   # 1/s^3
+max_tilt_deg = 8.0
+roll_factor = 0.6          # a = k g sin(tilt), hollow ball
+
+[train]
+algo = "ppo"               # ppo, sac, td3, a2c, ddpg
+n_envs = 14                # one process per env
+total_steps = 2_000_000
+device = "cuda"            # NN on the GPU; physics runs on the CPU workers
+seed = 0
+norm_obs = true
+norm_reward = true
+checkpoint_every = 200_000
+eval_episodes = 10
+
+[algos.ppo]
+n_steps = 512              # per env per update
+batch_size = 1024
+learning_rate = 3e-4
+gamma = 0.99
+gae_lambda = 0.95
+ent_coef = 0.0
+clip_range = 0.2
+net_arch = [256, 256]
+
+[algos.sac]
+learning_rate = 3e-4
+buffer_size = 1_000_000
+batch_size = 512
+gamma = 0.99
+train_freq = 1
+gradient_steps = 1
+net_arch = [256, 256]
+
+[algos.td3]
+learning_rate = 3e-4
+buffer_size = 1_000_000
+batch_size = 512
+gamma = 0.99
+action_noise_sigma = 0.1
+net_arch = [256, 256]
+
+[algos.ddpg]
+learning_rate = 3e-4
+buffer_size = 1_000_000
+batch_size = 512
+gamma = 0.99
+action_noise_sigma = 0.1
+net_arch = [256, 256]
+
+[algos.a2c]
+n_steps = 16
+learning_rate = 7e-4
+gamma = 0.99
+net_arch = [256, 256]
+
+[tof_net]                  # control/tof_net.py, used by train.py --net tof
+layers = [256, 256, 256]   # 3 hidden layers, each Linear -> LayerNorm -> ReLU -> Dropout
+dropout = 0.1
+actor_head = []            # extra layers after the net before the 3 servo outputs ([] = linear)
+critic_head = [256]        # value / Q head (Q also gets the action)
+
+[tof_net.env]              # env overrides for this net (saved in the run's meta.json)
+"env.tof_history" = 6      # ToF only, no servo state: more history so the net can see motion
+
+[wandb]                    # Weights & Biases logging in train.py (wandb login once first)
+enabled = true             # --no-wandb to skip
+project = "ball-on-plate-tof"
+entity = ""                # "" = your default W&B entity
+mode = "online"            # "online", "offline" (sync later: wandb sync runs/<run>/wandb) or "disabled"
+model_save_every = 200_000 # env steps between model uploads to W&B

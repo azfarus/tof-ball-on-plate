@@ -1,0 +1,10 @@
+# EKF on plate-frame ball state [x, y, vx, vy].
+
+roll_factor = 0.6            # a = k g sin(tilt); hollow sphere 1/(1+2/3)
+process_accel_sigma = 6.0    # m/s^2, covers kicks, rim hits, model error (swept 1.5-12, best mean)
+range_sigma_floor_m = 0.004
+bg_margin_m = 0.025          # reading must be this much nearer than empty-plate range
+gate_chi2 = 9.21             # 2 dof, 99%
+lost_after_s = 0.3           # re-initialise after this long without updates
+init_pos_sigma_m = 0.05
+init_vel_sigma_mps = 0.3

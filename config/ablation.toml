@@ -1,0 +1,71 @@
+# Ablation study (sim/ablate.py). Each variant overrides "section.key" in the
+# other configs (any depth, e.g. "servos.MG996R.deadband_us"); "run.interference"
+# switches sensor-to-sensor interference.
+# Every variant runs on every scenario in scenarios.toml, once per seed.
+
+seeds = [1, 2, 3]
+workers = 14
+
+[[variant]]
+name = "4_sensors"
+overrides = {}
+
+[[variant]]
+name = "3_sensors"
+overrides = { "scan.corners" = [0, 1, 2] }
+
+[[variant]]
+name = "2_adjacent"
+overrides = { "scan.corners" = [0, 1] }
+
+[[variant]]
+name = "2_diagonal"
+overrides = { "scan.corners" = [0, 2] }
+
+[[variant]]
+name = "1_sensor"
+overrides = { "scan.corners" = [0] }
+
+[[variant]]
+name = "4_no_stagger"
+overrides = { "scan.phase_stagger" = false }
+
+[[variant]]
+name = "4_step_mode"
+overrides = { "scan.mode" = "step" }
+
+[[variant]]
+name = "4_step_10deg"
+overrides = { "scan.step_deg" = 10.0 }
+
+[[variant]]
+name = "4_fov_18_fixed"
+overrides = { "sensor.fov_full_deg_near" = 18.0 }
+
+[[variant]]
+name = "4_no_interference"
+overrides = { "run.interference" = false }
+
+[[variant]]
+name = "scan_ideal"
+overrides = { "scan.actuator" = "ideal" }
+
+[[variant]]
+name = "scan_DS3218_333hz"
+overrides = { "scan.servo_model" = "DS3218", "scan.servo_update_hz" = 333.0, "scan.supply_v" = 6.8 }
+
+[[variant]]
+name = "servo_DS3218"
+overrides = { "platform.servo_model" = "DS3218" }
+
+[[variant]]
+name = "servo_TD8120MG"
+overrides = { "platform.servo_model" = "TD8120MG" }
+
+[[variant]]
+name = "servo_DS3218_333hz"
+overrides = { "platform.servo_model" = "DS3218", "platform.servo_update_hz" = 333.0 }
+
+[[variant]]
+name = "pwm_continuous"
+overrides = { "platform.servo_update_hz" = 4000.0, "servos.MG996R.max_frame_hz" = 4000.0 }
