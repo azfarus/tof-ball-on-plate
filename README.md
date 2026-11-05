@@ -75,7 +75,25 @@ Each run folder `runs/<run>/` holds:
 - `vecnormalize.pkl`, the observation statistics, which evaluation needs;
 - `meta.json`, the algo and env overrides;
 - `ckpt/`, checkpoints every 200k steps;
+- `replay_buffer.pkl` (SAC, TD3, DDPG only, ~1.4 GB), so a resumed run keeps its experience;
 - the TensorBoard logs and `wandb/`.
+
+Ctrl-C stops training cleanly: it saves `final.zip`, `vecnormalize.pkl` and the replay buffer before exiting.
+
+### Resume a run
+
+```bash
+# continue from where it stopped (final.zip is also written on Ctrl-C): 500k more steps
+.venv/bin/python control/train.py --resume runs/sac_tof_1m/final.zip --steps 500000
+
+# or from a checkpoint, e.g. after a crash
+.venv/bin/python control/train.py --resume runs/sac_tof_1m/ckpt/sac_<steps>_steps.zip --steps 500000
+```
+
+- `--steps` is the number of **additional** steps; the step counter continues from the saved model.
+- The algo, net and env overrides come from the run's `meta.json`. `--algo`, `--net` and `--set` are ignored.
+- Output goes to the same run folder: `final.zip` is overwritten and new checkpoints are added. The same W&B run continues, so the curves stay in one chart.
+- A resumed SAC/TD3/DDPG run reloads `replay_buffer.pkl` when it is there. Checkpoints carry no buffer by default (`ckpt_replay_buffer` in `config/control.toml`), so resuming from one refills the buffer from scratch.
 
 ## 4. Evaluate
 

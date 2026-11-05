@@ -16,6 +16,8 @@ seed = 0
 norm_obs = true
 norm_reward = true
 checkpoint_every = 200_000
+save_replay_buffer = true  # sac/td3/ddpg: replay_buffer.pkl with final.zip (~1.4 GB for 1M), used by --resume
+ckpt_replay_buffer = false # also with every checkpoint (one ~1.4 GB file each)
 eval_episodes = 10
 
 [algos.ppo]

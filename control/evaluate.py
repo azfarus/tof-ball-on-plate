@@ -27,19 +27,26 @@ def parse_sets(items):
     return out
 
 
+def run_files(path):
+    """Run folder, meta.json and the model's side files for a final.zip or a
+    checkpoint (<run>/ckpt/<algo>_<n>_steps.zip)."""
+    path = pathlib.Path(path).resolve()
+    ckpt = path.parent.name == "ckpt"
+    run = path.parent.parent if ckpt else path.parent
+    meta = json.loads((run / "meta.json").read_text())
+    a = meta["algo"]
+    side = lambda kind: (path.parent / path.name.replace("_steps.zip", "_steps.pkl")
+                         .replace(f"{a}_", f"{a}_{kind}_", 1) if ckpt else run / f"{kind}.pkl")
+    return run, meta, side("vecnormalize"), side("replay_buffer")
+
+
 def load_model(path):
     """SB3 model + its VecNormalize stats (saved next to it by train.py)."""
     import pickle
     from stable_baselines3 import A2C, DDPG, PPO, SAC, TD3
-    path = pathlib.Path(path)
-    ckpt = path.parent.name == "ckpt"  # checkpoint: <run>/ckpt/<algo>_<n>_steps.zip
-    run = path.parent.parent if ckpt else path.parent
-    meta = json.loads((run / "meta.json").read_text())
+    _, meta, norm, _ = run_files(path)
     algo = {"ppo": PPO, "sac": SAC, "td3": TD3, "a2c": A2C, "ddpg": DDPG}[meta["algo"]]
     model = algo.load(path, device="cpu")
-    norm = (path.parent / path.name.replace("_steps.zip", "_steps.pkl")
-            .replace(f"{meta['algo']}_", f"{meta['algo']}_vecnormalize_", 1)
-            if ckpt else run / "vecnormalize.pkl")
     vn = pickle.loads(norm.read_bytes()) if norm.exists() else None
     return model, vn, meta["overrides"]
 
