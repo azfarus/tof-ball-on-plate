@@ -8,7 +8,7 @@ max_tilt_deg = 8.0
 roll_factor = 0.6          # a = k g sin(tilt), hollow ball
 
 [train]
-algo = "ppo"               # ppo, sac, td3, a2c, ddpg
+algo = "sac"               # sac (continuous, off-policy, sample-efficient), td3, ddpg, ppo, a2c
 n_envs = 14                # one process per env
 total_steps = 2_000_000
 device = "cuda"            # NN on the GPU; physics runs on the CPU workers
@@ -35,26 +35,35 @@ net_arch = [256, 256]
 
 [algos.sac]
 learning_rate = 3e-4
-buffer_size = 1_000_000
-batch_size = 512
-gamma = 0.99
-train_freq = 1
-gradient_steps = 1
+buffer_size = 300_000      # last 600 episodes (100 min of play); ~0.7 GB RAM with tof_history 10
+learning_starts = 10_000   # random actions first (20 episodes) so VecNormalize and Q see the range
+batch_size = 256
+gamma = 0.99               # 50 Hz -> ~2 s horizon, longer than a fall (~2 s from 0.08 m)
+tau = 0.005
+train_freq = 1             # per vector step = n_envs transitions
+gradient_steps = 7         # 7 updates per 14 transitions (UTD 0.5): 14 envs ~130 steps/s on RTX 3070
+ent_coef = "auto"
 net_arch = [256, 256]
 
 [algos.td3]
 learning_rate = 3e-4
-buffer_size = 1_000_000
-batch_size = 512
+buffer_size = 300_000
+learning_starts = 10_000
+batch_size = 256
 gamma = 0.99
+train_freq = 1
+gradient_steps = 7         # UTD 0.5 with 14 envs (see sac)
 action_noise_sigma = 0.1
 net_arch = [256, 256]
 
 [algos.ddpg]
 learning_rate = 3e-4
-buffer_size = 1_000_000
-batch_size = 512
+buffer_size = 300_000
+learning_starts = 10_000
+batch_size = 256
 gamma = 0.99
+train_freq = 1
+gradient_steps = 7         # UTD 0.5 with 14 envs (see sac)
 action_noise_sigma = 0.1
 net_arch = [256, 256]
 
@@ -66,12 +75,14 @@ net_arch = [256, 256]
 
 [tof_net]                  # control/tof_net.py, used by train.py --net tof
 layers = [256, 256, 256]   # 3 hidden layers, each Linear -> LayerNorm -> ReLU -> Dropout
-dropout = 0.1
-actor_head = []            # extra layers after the net before the 3 servo outputs ([] = linear)
-critic_head = [256]        # value / Q head (Q also gets the action)
+dropout = 0.01             # DroQ value: LayerNorm + small dropout steadies Q at higher UTD; 0.1 adds too much noise
+actor_head = []            # features -> 3 servo outputs directly (tanh-squashed by SAC)
+critic_head = [256]        # Q head on features + action
 
 [tof_net.env]              # env overrides for this net (saved in the run's meta.json)
-"env.tof_history" = 6      # ToF only, no servo state: more history so the net can see motion
+"env.tof_history" = 10     # 100 ms per sensor (100 Hz). No servo state in the input, so the net
+                           # infers plate tilt from ball acceleration: needs > ~3 readings per sensor
+                           # with the ball in view. Input = 4 x 10 x 7 = 280
 
 [wandb]                    # Weights & Biases logging in train.py (wandb login once first)
 enabled = true             # --no-wandb to skip
