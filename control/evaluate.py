@@ -28,15 +28,19 @@ def parse_sets(items):
 
 
 def run_files(path):
-    """Run folder, meta.json and the model's side files for a final.zip or a
-    checkpoint (<run>/ckpt/<algo>_<n>_steps.zip)."""
+    """Run folder, meta.json and the model's side files for final.zip, best.zip
+    or a checkpoint (<run>/ckpt/<algo>_<n>_steps.zip)."""
     path = pathlib.Path(path).resolve()
     ckpt = path.parent.name == "ckpt"
     run = path.parent.parent if ckpt else path.parent
     meta = json.loads((run / "meta.json").read_text())
     a = meta["algo"]
-    side = lambda kind: (path.parent / path.name.replace("_steps.zip", "_steps.pkl")
-                         .replace(f"{a}_", f"{a}_{kind}_", 1) if ckpt else run / f"{kind}.pkl")
+    if ckpt:
+        side = lambda kind: path.parent / path.name.replace("_steps.zip", "_steps.pkl").replace(
+            f"{a}_", f"{a}_{kind}_", 1)
+    else:  # final.zip -> vecnormalize.pkl, best.zip -> best_vecnormalize.pkl
+        pre = "" if path.stem == "final" else path.stem + "_"
+        side = lambda kind: run / f"{pre}{kind}.pkl"
     return run, meta, side("vecnormalize"), side("replay_buffer")
 
 

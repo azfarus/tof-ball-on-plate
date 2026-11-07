@@ -74,7 +74,8 @@ Each run folder `runs/<run>/` holds:
 - `final.zip`, the model;
 - `vecnormalize.pkl`, the observation statistics, which evaluation needs;
 - `meta.json`, the algo and env overrides;
-- `ckpt/`, checkpoints every 200k steps;
+- `ckpt/`, the newest 5 checkpoints, one every 200k steps (`keep_last_ckpt`, `checkpoint_every`); older ones are deleted;
+- `best.zip` + `best_vecnormalize.pkl`, the model with the highest mean return over the last 100 training episodes, checked every 20k steps; `best.json` gives its step and return;
 - `replay_buffer.pkl` (SAC, TD3, DDPG only, ~1.4 GB), so a resumed run keeps its experience;
 - the TensorBoard logs and `wandb/`.
 
@@ -99,6 +100,7 @@ Ctrl-C stops training cleanly: it saves `final.zip`, `vecnormalize.pkl` and the 
 
 ```bash
 .venv/bin/python control/evaluate.py --controller model --path runs/sac_tof_1m/final.zip --episodes 10
+.venv/bin/python control/evaluate.py --controller model --path runs/sac_tof_1m/best.zip       # best so far
 .venv/bin/python control/evaluate.py --controller model --path runs/sac_tof_1m/ckpt/sac_<steps>_steps.zip   # a checkpoint
 .venv/bin/python control/evaluate.py --controller pid --episodes 10      # non-learned baseline
 .venv/bin/python control/evaluate.py --controller zero                   # plate held flat

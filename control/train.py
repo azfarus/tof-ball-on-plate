@@ -20,12 +20,12 @@ import tomllib
 
 import numpy as np
 from stable_baselines3 import A2C, DDPG, PPO, SAC, TD3
-from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.noise import NormalActionNoise
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor, VecNormalize
 
 from bop_env import BallOnPlateEnv, config
+from callbacks import EpisodeStats, RollingCheckpoint, SaveBest
 from evaluate import parse_sets, run_files
 from tof_net import ToFNet
 
@@ -46,18 +46,6 @@ def hyperparams(algo, hp, net=None):
     if sigma:
         kw["action_noise"] = NormalActionNoise(np.zeros(3), sigma * np.ones(3))
     return {**kw, **hp}
-
-
-class EpisodeStats(BaseCallback):
-    """Logs fall-off rate and final distance to target per finished episode."""
-
-    def _on_step(self):
-        for done, info in zip(self.locals["dones"], self.locals["infos"]):
-            if done:
-                self.logger.record_mean("episode/fell", float(info["escaped"]))
-                self.logger.record_mean("episode/final_err_mm", 1000 * info["err_m"])
-                self.logger.record_mean("episode/length_s", info["t"])
-        return True
 
 
 def load_dotenv(path):
@@ -150,11 +138,13 @@ def main():
                      **hyperparams(args.algo, ctrl["algos"][args.algo], ctrl["tof_net"]
                                    if args.net == "tof" else None))
     every = max(tr["checkpoint_every"] // args.n_envs, 1)
-    ckpt = CheckpointCallback(every, str(out / "ckpt"), name_prefix=args.algo,
-                              save_vecnormalize=True,
-                              save_replay_buffer=off_policy and tr["ckpt_replay_buffer"])
+    ckpt = RollingCheckpoint(tr["keep_last_ckpt"], every, str(out / "ckpt"),
+                             name_prefix=args.algo, save_vecnormalize=True,
+                             save_replay_buffer=off_policy and tr["ckpt_replay_buffer"])
+    best = SaveBest(out, max(tr["best_check_every"] // args.n_envs, 1),
+                    tr["best_min_episodes"], verbose=1)
     try:
-        model.learn(total_timesteps=args.steps, callback=[ckpt, *callbacks],
+        model.learn(total_timesteps=args.steps, callback=[ckpt, best, *callbacks],
                     progress_bar=False, reset_num_timesteps=not args.resume)
     except KeyboardInterrupt:
         print("interrupted: saving final.zip so the run can be resumed")

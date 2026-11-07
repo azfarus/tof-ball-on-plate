@@ -17,7 +17,7 @@ uv venv .venv -p 3.13 && uv pip install --python .venv/bin/python -r requirement
 .venv/bin/python control/evaluate.py --controller pid --episodes 10     # non-learned baseline on the env
 .venv/bin/python control/train.py --algo ppo --n-envs 14 --steps 2000000  # ppo|sac|td3|a2c|ddpg, NN on CUDA
 .venv/bin/python control/evaluate.py --controller model --path runs/<run>/final.zip
-.venv/bin/python control/train.py --resume runs/<run>/final.zip --steps 500000   # or ckpt/<algo>_<n>_steps.zip; Ctrl-C saves final.zip
+.venv/bin/python control/train.py --resume runs/<run>/final.zip --steps 500000   # or best.zip / ckpt/<algo>_<n>_steps.zip (last 5 kept); Ctrl-C saves final.zip
 ```
 
 See `docs/ENV.md` for the full env reference. `--set section.key=value` (JSON value) overrides any config value in tools/ and control/ scripts. No test suite; `gymnasium.utils.env_checker.check_env` passes on the env.
