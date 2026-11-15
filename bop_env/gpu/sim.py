@@ -20,7 +20,7 @@ class WarpSim(ObservationMixin):
         wp.set_device(device)
         self.device_obj = wp.get_device(device)
         mem = self.device_obj.total_memory
-        self.graph_envs = 512 if mem >= 24 * 1024**3 else (256 if mem >= 16 * 1024**3 else 64)
+        self.graph_envs = 512 if mem >= 20 * 1024**3 else (256 if mem >= 12 * 1024**3 else 64)
         self.cfg, self.b, self.seed, self.device = cfg, nworld, int(seed), device
         self.plate, self.sc, self.sn, self.pf, self.e = (
             cfg["plate"], cfg["scan"], cfg["sensor"], cfg["platform"], cfg["env"])
