@@ -18,6 +18,8 @@ class WarpSim(ObservationMixin):
 
     def __init__(self, cfg, nworld, seed=0, device="cuda:0"):
         wp.set_device(device)
+        self.device_obj = wp.get_device(device)
+        self.graph_envs = 256 if self.device_obj.total_memory >= 16 * 1024**3 else 64
         self.cfg, self.b, self.seed, self.device = cfg, nworld, int(seed), device
         self.plate, self.sc, self.sn, self.pf, self.e = (
             cfg["plate"], cfg["scan"], cfg["sensor"], cfg["platform"], cfg["env"])
@@ -56,7 +58,6 @@ class WarpSim(ObservationMixin):
         self.scan_frame_dt = (1.0 / min(self.sc["servo_update_hz"], self.scan_spec["max_frame_hz"])
                               if self.scan_spec else 1.0)
 
-        self.device_obj = wp.get_device(device)
         self.m = mjw.put_model(self.mjm)
         self.m.opt.warn_overflow = 0
         self.d = mjw.make_data(self.mjm, nworld=nworld, nconmax=64, njmax=256)
@@ -319,7 +320,7 @@ class WarpSim(ObservationMixin):
         return obs, info["reward"], info["escaped"], info["truncated"], info
 
     def _capture(self):
-        if self.b > 64 or self.n_sub % self.sub_every != 0:
+        if self.b > self.graph_envs or self.n_sub % self.sub_every != 0:
             return
         for j in range(self.sub_every):
             self._substep(j == self.sub_every // 2)
