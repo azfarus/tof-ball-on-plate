@@ -7,10 +7,11 @@ dependencies = ["mujoco==3.17.0", "numpy", "gymnasium"]
 
 [project.optional-dependencies]
 train = ["torch", "stable-baselines3", "tensorboard", "wandb", "matplotlib"]
+gpu = ["mujoco-warp==3.17.0"]
 
 [build-system]
 requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["bop_env"]
+packages = ["bop_env", "bop_env.gpu"]

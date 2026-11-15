@@ -1,7 +1,8 @@
 # Install: uv venv .venv -p 3.13 && uv pip install --python .venv/bin/python -r requirements.txt
-# torch is the CUDA 13.2 build (GPU training); for CPU only drop the index line.
+# torch is the CUDA 13.2 build; for a CPU-only setup drop this line and mujoco-warp.
 --extra-index-url https://download.pytorch.org/whl/cu132
 mujoco==3.17.0
+mujoco-warp==3.17.0
 numpy==2.5.4
 matplotlib==3.11.2
 gymnasium==1.4.0

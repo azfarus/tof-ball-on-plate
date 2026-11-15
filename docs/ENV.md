@@ -394,20 +394,18 @@ The loop stops early if the ball falls off. Latency in the observation: a readin
 
 ## 14. Parallelism and hardware acceleration
 
-- **Physics on CPU:** MuJoCo, ray casting and the EKF run in numpy, one process per env. A single env runs at ~45 steps/s (0.9× real time). Most of the time goes to the ToF ray casts (~50%), then `mj_step` (~14%) and the servo model (~8%).
-- **Many headless copies:**
-  - `bop_env.make_vec(n)` gives a Gymnasium `AsyncVectorEnv` with the `forkserver` start method; `asynchronous=False` gives a `SyncVectorEnv`.
-  - Under SB3, `control/train.py` uses `SubprocVecEnv` (forkserver) plus `VecMonitor` and `VecNormalize`.
-  - 14 workers give ~335 steps/s.
-  - Scripts that start workers need an `if __name__ == "__main__":` guard and must be run from a file, not stdin.
+- **Reference physics on CPU:** MuJoCo, ray casting and the EKF run in numpy, one process per env. A single env runs at ~45 steps/s (0.9× real time). Most of the time goes to the ToF ray casts (~50%), then `mj_step` (~14%) and the servo model (~8%). Scenario tools and parity checks use this path.
+- **Training physics on GPU:** `control/train.py` defaults to `--physics warp`, which uses the batched MuJoCo Warp model in `bop_env/gpu/`. The 300-ray fan, histogram, background map, scan schedule and EKF are implemented as Warp kernels, and CUDA graph capture covers a ten-substep block. Observations are transferred to the host at the 50 Hz control boundary. An RTX 3070 runs 64 worlds at roughly 600-800 environment steps/s depending on scan and interference settings; the first launch compiles kernels for about a minute.
+- **Many headless copies on CPU:** `bop_env.make_vec(n)` gives a Gymnasium `AsyncVectorEnv` with the `forkserver` start method; `asynchronous=False` gives a `SyncVectorEnv`. Under SB3, `--physics cpu` uses `SubprocVecEnv` (forkserver) plus `VecMonitor` and `VecNormalize`. Fourteen workers give about 335 steps/s, and scripts that start workers need an `if __name__ == "__main__":` guard.
 - **Neural network on GPU:** the policy trains with torch CUDA (`device = "cuda"` in `control.toml`).
-- **Not done:** GPU physics (MJX / MuJoCo Warp). It would need the ToF histogram model and the EKF rewritten in JAX or Warp.
-- **Rendering:** headless unless `render_mode="human"`, which opens the passive viewer.
+- **GPU limits:** `[env.randomize]` model rebuilding is not supported by the Warp backend, and GPU trajectories are not bit-identical to CPU because of floating-point and atomic-order differences.
+- **Rendering:** headless unless `render_mode="human"`, which opens the passive viewer. GPU training has no viewer; use the CPU path for visual inspection.
 
 Training and evaluation:
 
 ```bash
-.venv/bin/python control/train.py --algo ppo --n-envs 14 --steps 2000000   # ppo|sac|td3|a2c|ddpg
+.venv/bin/python control/train.py --algo ppo --steps 2000000              # GPU physics is the default
+.venv/bin/python control/train.py --algo ppo --physics cpu --n-envs 14  # original CPU path
 .venv/bin/python control/evaluate.py --controller pid --episodes 10
 .venv/bin/python control/evaluate.py --controller model --path runs/<run>/final.zip
 ```

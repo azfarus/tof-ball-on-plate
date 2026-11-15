@@ -5,7 +5,7 @@ This repository simulates closed-loop 2-D ball-on-plate balancing, where time-of
 - three hobby PWM servos (3-RRS) tilt the plate;
 - four corner VL53L4CD ToF sensors track the ball, fused by an EKF.
 
-It is built on MuJoCo, provides a Gymnasium environment (`BallOnPlateToF-v0`), and trains with Stable-Baselines3.
+It is built on MuJoCo, provides a Gymnasium environment (`BallOnPlateToF-v0`), and trains with Stable-Baselines3. Training uses a batched MuJoCo Warp backend on the GPU by default; the original CPU simulation remains available as the reference.
 
 Docs:
 - `docs/ENV.md` is the full environment reference: action, observation, reward, servo, ToF and EKF models, and config keys.
@@ -15,7 +15,7 @@ All commands run from the repository root.
 
 ## 1. Install
 
-You need Python 3.13 and [uv](https://docs.astral.sh/uv/). The GPU training stack is torch with CUDA 13.2. For a CPU-only install, remove the `--extra-index-url` line from `requirements.txt`.
+You need Python 3.13 and [uv](https://docs.astral.sh/uv/). The GPU training stack is torch with CUDA 13.2 and MuJoCo Warp. For a CPU-only setup, remove the `--extra-index-url` line and `mujoco-warp` from `requirements.txt`, then train with `--physics cpu`.
 
 ```bash
 uv venv .venv -p 3.13
@@ -62,13 +62,14 @@ TensorBoard works too, without an account: `.venv/bin/tensorboard --logdir runs`
 |---|---|
 | `--algo` | `sac`, `td3`, `ddpg`, `ppo`, `a2c` (hyperparameters in `[algos.*]`, `config/control.toml`) |
 | `--net` | `tof`: `control/tof_net.py` on `obs["tof"]` only (settings in `[tof_net]`); `mlp`: SB3 MLP on everything |
-| `--n-envs` | Parallel headless env processes (physics on CPU, one core each) |
+| `--physics` | `warp` (default, batched GPU physics) or `cpu` (one CPU worker per environment) |
+| `--n-envs` | Number of CPU workers when `--physics cpu`, or GPU worlds when `--physics warp` (default 64) |
 | `--steps` | Total env steps |
 | `--device` | `cuda` (default) or `cpu`, for the network |
 | `--set k=v` | Override any env or sim config value, e.g. `--set scan.actuator=ideal`, `--set platform.servo_model=DS3218` |
 | `--out` | Run folder (default `runs/<algo>_<net>_<time>`) |
 
-Throughput is about 335 env steps/s with 14 workers, so 1M steps take roughly 1 h.
+The CPU backend reaches about 335 environment steps/s with 14 workers. The GPU backend batches 64 worlds and reaches roughly 600-800 environment steps/s on an RTX 3070, depending on the scan and interference settings; the first run spends extra time compiling Warp kernels. Use `--physics cpu` to retain the original reference path. `bop_env/gpu/` contains the optional backend.
 
 Each run folder `runs/<run>/` holds:
 - `final.zip`, the model;
@@ -138,7 +139,7 @@ Scripts that start worker processes need an `if __name__ == "__main__":` guard.
 
 | Path | Contents |
 |---|---|
-| `bop_env/` | Simulation and Gymnasium env (no learning code) |
+| `bop_env/` | Simulation and Gymnasium env (no learning code); `bop_env/gpu/` is the optional MuJoCo Warp backend |
 | `control/` | PID, ToF net, SB3 training, evaluation |
 | `tools/` | Scripted scenario runs, ablation, calibration, plots |
 | `config/` | Every parameter, one TOML per part |

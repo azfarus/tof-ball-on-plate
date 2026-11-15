@@ -1,11 +1,13 @@
 """Train an RL agent on the env with Stable-Baselines3.
 
-Physics runs headless on CPU worker processes (one env each, SubprocVecEnv);
-the policy network trains on the GPU. Settings in config/control.toml [train]
-and [algos.*]; any env/sim config value can be overridden with --set.
+Training uses batched MuJoCo Warp physics on the GPU by default. The policy
+network also trains on the GPU. Use --physics cpu for the original one-process-
+per-environment CPU backend. Settings are in config/control.toml [train] and
+[algos.*]; any env/sim config value can be overridden with --set.
 
 Usage (from project root):
-  .venv/bin/python control/train.py --algo ppo --n-envs 14 --steps 2000000
+  .venv/bin/python control/train.py --algo ppo --physics warp --steps 2000000
+  .venv/bin/python control/train.py --algo sac --physics cpu --n-envs 14
   .venv/bin/python control/train.py --algo sac --set scan.actuator=ideal
   .venv/bin/python control/train.py --algo sac --net tof   # raw-ToF 3-layer net (tof_net.py)
   .venv/bin/python control/train.py --resume runs/<run>/final.zip --steps 500000
@@ -78,7 +80,8 @@ def main():
     tr = ctrl["train"]
     ap = argparse.ArgumentParser()
     ap.add_argument("--algo", default=tr["algo"], choices=list(ALGOS))
-    ap.add_argument("--n-envs", type=int, default=tr["n_envs"])
+    ap.add_argument("--physics", choices=["warp", "cpu"], default=tr.get("physics", "cpu"))
+    ap.add_argument("--n-envs", type=int, default=None)
     ap.add_argument("--steps", type=int, default=tr["total_steps"])
     ap.add_argument("--device", default=tr["device"])
     ap.add_argument("--seed", type=int, default=tr["seed"])
@@ -99,12 +102,17 @@ def main():
     if args.resume:
         out, meta, norm_path, buf_path = run_files(args.resume)
         args.algo, args.net = meta["algo"], meta["args"]["net"]
+        args.physics = meta["args"].get("physics", "cpu")
         overrides = meta["overrides"]
+        if args.n_envs is None:
+            args.n_envs = meta["args"].get("n_envs", tr["n_envs"])
     else:
         net = ctrl["tof_net"] if args.net == "tof" else None
         overrides = {**(net["env"] if net else {}), **parse_sets(args.set)}
         out = config.ROOT / (args.out or
                              f"runs/{args.algo}_{args.net}_{time.strftime('%Y%m%d_%H%M%S')}")
+        if args.n_envs is None:
+            args.n_envs = tr.get("warp_envs", tr["n_envs"]) if args.physics == "warp" else tr["n_envs"]
     out.mkdir(parents=True, exist_ok=True)
 
     callbacks = [EpisodeStats()]
@@ -118,12 +126,20 @@ def main():
                 args=meta.get("args", vars(args)), resumed=meta.get("resumed", 0) + bool(args.resume))
     (out / "meta.json").write_text(json.dumps(meta, indent=1))
 
-    venv = make_vec_env(BallOnPlateEnv, n_envs=args.n_envs, seed=args.seed,
-                        env_kwargs={"overrides": overrides}, vec_env_cls=SubprocVecEnv,
-                        vec_env_kwargs={"start_method": "forkserver"})
-    venv = VecMonitor(venv)
+    if args.physics == "warp":
+        from warp_vec import WarpVecEnv, make_warp_sim
+        venv = WarpVecEnv(make_warp_sim(args.n_envs, overrides, seed=args.seed), seed=args.seed)
+        venv = VecMonitor(venv)
+    else:
+        venv = make_vec_env(BallOnPlateEnv, n_envs=args.n_envs, seed=args.seed,
+                            env_kwargs={"overrides": overrides}, vec_env_cls=SubprocVecEnv,
+                            vec_env_kwargs={"start_method": "forkserver"})
+        venv = VecMonitor(venv)
     algo = ALGOS[args.algo]
     off_policy = args.algo in ("sac", "td3", "ddpg")
+    hp = dict(ctrl["algos"][args.algo])
+    if off_policy and tr.get("utd") is not None:
+        hp["gradient_steps"] = max(1, int(round(float(tr["utd"]) * args.n_envs)))
     if args.resume:
         venv = VecNormalize.load(str(norm_path), venv)
         model = algo.load(args.resume, env=venv, device=args.device, tensorboard_log=str(out))
@@ -135,7 +151,7 @@ def main():
         venv = VecNormalize(venv, norm_obs=tr["norm_obs"], norm_reward=tr["norm_reward"])
         model = algo("MultiInputPolicy", venv, device=args.device, seed=args.seed,
                      tensorboard_log=str(out), verbose=1,
-                     **hyperparams(args.algo, ctrl["algos"][args.algo], ctrl["tof_net"]
+                     **hyperparams(args.algo, hp, ctrl["tof_net"]
                                    if args.net == "tof" else None))
     every = max(tr["checkpoint_every"] // args.n_envs, 1)
     ckpt = RollingCheckpoint(tr["keep_last_ckpt"], every, str(out / "ckpt"),

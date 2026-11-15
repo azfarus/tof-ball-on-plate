@@ -15,12 +15,19 @@ uv venv .venv -p 3.13 && uv pip install --python .venv/bin/python -r requirement
 .venv/bin/python tools/run_scenarios.py --set scan.actuator=ideal --out sim/out/ideal_scan
 .venv/bin/python tools/ablate.py                    # variants in config/ablation.toml x scenarios x seeds, parallel
 .venv/bin/python control/evaluate.py --controller pid --episodes 10     # non-learned baseline on the env
-.venv/bin/python control/train.py --algo ppo --n-envs 14 --steps 2000000  # ppo|sac|td3|a2c|ddpg, NN on CUDA
+.venv/bin/python control/train.py --algo ppo --physics warp --n-envs 64 --steps 2000000  # ppo|sac|td3|a2c|ddpg, GPU physics + NN
+.venv/bin/python control/train.py --algo ppo --physics cpu --n-envs 14 --steps 2000000   # CPU reference backend
 .venv/bin/python control/evaluate.py --controller model --path runs/<run>/final.zip
 .venv/bin/python control/train.py --resume runs/<run>/final.zip --steps 500000   # or best.zip / ckpt/<algo>_<n>_steps.zip (last 5 kept); Ctrl-C saves final.zip
 ```
 
 See `docs/ENV.md` for the full env reference. `--set section.key=value` (JSON value) overrides any config value in tools/ and control/ scripts. No test suite; `gymnasium.utils.env_checker.check_env` passes on the env.
+
+GPU backend notes (2026-11-16):
+- `control/train.py` defaults to `--physics warp`; use `--physics cpu` for the original path.
+- `bop_env/gpu/sim.py` allocates the world batch and runs a 10-substep CUDA graph. The graph is used for batches up to 64 worlds; larger batches use the same kernels without graph capture.
+- The GPU backend rejects non-empty `[env.randomize]` because it would require rebuilding the MuJoCo model; the current configuration leaves that table empty.
+- The GPU ToF path uses the same 300-ray fan, background map, phase schedule and EKF equations as `bop_env/`. The CPU `Sim` remains the source of truth for scientific comparisons.
 
 ## Code style (user rules)
 
@@ -31,7 +38,8 @@ Max 500 lines per file, no heavy indirection, simple lines, short comments. Ever
 Environment code and controller/learning code are kept apart (user rule):
 - `bop_env/`: the simulation and the Gymnasium env (`BallOnPlateToF-v0`). Nothing here knows about learning.
 - `tools/`: env studies with scripted tilt (scenarios, ablation, calibration, plots).
-- `control/`: controllers acting through the env API. `pid.py` is the non-learned cascade PID (uses `bop_env.legs.ik`), `train.py` is SB3 training (`--net tof`: `tof_net.py`, 3-layer LayerNorm+dropout net on raw ToF only), `evaluate.py` scores any controller. Settings in `config/control.toml` (not read by the env).
+- `bop_env/gpu/`: optional batched MuJoCo Warp backend for training. It mirrors the CPU `Sim` ordering and implements the servo, disturbance, ToF histogram, scan and EKF steps as Warp kernels. The CPU `Sim` remains the reference and the scenario tools still use it.
+- `control/`: controllers acting through the env API. `pid.py` is the non-learned cascade PID (uses `bop_env.legs.ik`), `train.py` is SB3 training (`--net tof`: `tof_net.py`, 3-layer LayerNorm+dropout net on raw ToF only; `--physics warp` is the default, `--physics cpu` is the original backend), `warp_vec.py` adapts the GPU simulation to SB3, `evaluate.py` scores any controller. Settings in `config/control.toml` (not read by the env).
 
 ## Simulation architecture (bop_env/)
 
@@ -44,7 +52,7 @@ MuJoCo sim of 1–4 corner VL53L4CD sensors (fitted corners in `scan.corners`) o
   - In the MJCF each servo is a motor hinge (reflected armature, gear friction) in series with a free backlash hinge with end stops. Horn angle = motor + backlash.
 - `legs.py`: 3-RRS geometry, closed-form `ik()`, MJCF for the legs. **Servo angle 0 = crank horizontal = plate flat** at neutral height (verified: `ik(0,0,0) = 0`).
 - `model.py`: builds the MJCF. Plate is a free body on the legs. The rim is optional (`rim_height_m = 0` gives an open edge). The ball is free (hollow-shell inertia). Each sensor housing is one body. With `scan.actuator = "servo"` it sits on a scan servo (z hinge, angle 0 = corner bisector); with `"ideal"` the yaw follows the triangle wave exactly.
-- `sim.py`: `Sim` is the one physics loop shared by the env and tools. It handles `reset()`, `step()` and `advance(s)`, with host commands `send_legs(q)` and `command_pose(tilt, heave)`. Each step runs, in order: servo torques, scan servos, random ball forces, ToF sub-samples, EKF predict, then `mj_step`. It builds the empty-plate background map on construction. `escaped` becomes true when the ball centre passes the plate edge or drops below the plate top.
+- `sim.py`: `Sim` is the CPU physics loop shared by the env and tools. It handles `reset()`, `step()` and `advance(s)`, with host commands `send_legs(q)` and `command_pose(tilt, heave)`. Each step runs, in order: servo torques, scan servos, random ball forces, ToF sub-samples, EKF predict, then `mj_step`. It builds the empty-plate background map on construction. `escaped` becomes true when the ball centre passes the plate edge or drops below the plate top. The GPU equivalent is `bop_env/gpu/sim.py`.
 - `tof.py`, `scan.py`, `tracker.py`, `disturb.py`: as before. `tof.py` covers the ray-cast VL53L4CD (histogram, strongest peak, sigma from signal, interference as ambient). `scan.py` is the triangle-wave schedule, `tracker.py` the EKF with a tilt-aware process and a clamp inside the plate, and `disturb.py` the tilt profiles plus kicks and OU push. The tracker bearing is the commanded yaw or the measured horn angle plus feedback noise (`scan.yaw_source`).
 - `env.py`: `BallOnPlateEnv(overrides, render_mode)` and `make_vec(n)` (gymnasium `AsyncVectorEnv`, forkserver).
   - Action: 3 servo angles / `platform.range_deg`, in [-1, 1].
@@ -54,7 +62,7 @@ MuJoCo sim of 1–4 corner VL53L4CD sensors (fitted corners in `scan.corners`) o
   - `[randomize]` ranges are redrawn every reset, which rebuilds the model.
 - `viewer.py`: passive viewer, used by `tools/run_scenarios.py --view` and `render_mode="human"`.
 
-Hardware acceleration: physics, ray-cast ToF and the EKF are CPU (MuJoCo + numpy), one process per env. The policy network trains on the GPU (torch CUDA, RTX 3070). Throughput is ~45 env steps/s per process (0.9× real time) and ~335/s with 14 workers. A GPU physics port (MJX / MuJoCo Warp) would need the ToF histogram model and EKF rewritten in JAX/Warp and has not been done.
+Hardware acceleration: the reference physics, ray-cast ToF and EKF are CPU (MuJoCo + numpy), one process per env, at ~45 env steps/s per process (0.9× real time) and ~335/s with 14 workers. The default training path uses MuJoCo Warp (`mujoco-warp==3.17.0`) with all worlds in one process on the GPU; the servo host state, ToF histogram/peak selection, scan schedule and EKF are Warp kernels, and CUDA graph capture covers one 10-physics-step block. On an RTX 3070, 64 worlds run at roughly 600-800 environment steps/s depending on scan/interference settings (first start compiles kernels for about a minute). The policy network trains on the GPU (torch CUDA, RTX 3070). GPU results are not bit-identical to CPU because of GPU atomics and floating-point differences; use the CPU reference for parity checks. `[env.randomize]` model rebuilding is not supported by the GPU backend yet, and evaluation remains CPU for the reference path.
 
 Servo refactor results (2026-11-04):
 - Hobby scan servos cannot follow the 90°/50 ms sweep, which needs ~1800°/s against ~430–600°/s rated. Commanded ±45°, actual span: SG90 −33…−21°, MG945 −12…−5°, DS3218 @333 Hz −3…+4°. The sensors end up nearly fixed near the bisector.

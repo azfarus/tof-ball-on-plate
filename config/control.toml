@@ -9,9 +9,12 @@ roll_factor = 0.6          # a = k g sin(tilt), hollow ball
 
 [train]
 algo = "sac"               # sac (continuous, off-policy, sample-efficient), td3, ddpg, ppo, a2c
-n_envs = 14                # one process per env
+physics = "warp"           # "warp" = batched GPU physics; "cpu" = original CPU workers
+n_envs = 14                # CPU workers (physics = "cpu")
+warp_envs = 64             # batched GPU worlds (physics = "warp")
+utd = 0.5                  # off-policy gradient updates per environment transition
 total_steps = 2_000_000
-device = "cuda"            # NN on the GPU; physics runs on the CPU workers
+device = "cuda"            # NN on the GPU; physics backend is selected by [train].physics
 seed = 0
 norm_obs = true
 norm_reward = true
