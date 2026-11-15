@@ -64,6 +64,8 @@ TensorBoard works too, without an account: `.venv/bin/tensorboard --logdir runs`
 | `--net` | `tof`: `control/tof_net.py` on `obs["tof"]` only (settings in `[tof_net]`); `mlp`: SB3 MLP on everything |
 | `--physics` | `warp` (default, batched GPU physics) or `cpu` (one CPU worker per environment) |
 | `--n-envs` | Number of CPU workers when `--physics cpu`, or GPU worlds when `--physics warp` (default 64) |
+| `--batch-size` | SB3 minibatch size; overrides the algorithm setting |
+| `--utd` | Off-policy gradient updates per environment transition |
 | `--steps` | Total env steps |
 | `--device` | `cuda` (default) or `cpu`, for the network |
 | `--set k=v` | Override any env or sim config value, e.g. `--set scan.actuator=ideal`, `--set platform.servo_model=DS3218` |

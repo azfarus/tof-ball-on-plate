@@ -82,6 +82,8 @@ def main():
     ap.add_argument("--algo", default=tr["algo"], choices=list(ALGOS))
     ap.add_argument("--physics", choices=["warp", "cpu"], default=tr.get("physics", "cpu"))
     ap.add_argument("--n-envs", type=int, default=None)
+    ap.add_argument("--batch-size", type=int, default=None, help="SB3 minibatch size")
+    ap.add_argument("--utd", type=float, default=None, help="gradient updates per env transition")
     ap.add_argument("--steps", type=int, default=tr["total_steps"])
     ap.add_argument("--device", default=tr["device"])
     ap.add_argument("--seed", type=int, default=tr["seed"])
@@ -138,8 +140,12 @@ def main():
     algo = ALGOS[args.algo]
     off_policy = args.algo in ("sac", "td3", "ddpg")
     hp = dict(ctrl["algos"][args.algo])
-    if off_policy and tr.get("utd") is not None:
-        hp["gradient_steps"] = max(1, int(round(float(tr["utd"]) * args.n_envs)))
+    if args.batch_size is not None:
+        hp["batch_size"] = args.batch_size
+    if off_policy:
+        utd = args.utd if args.utd is not None else tr.get("utd")
+        if utd is not None:
+            hp["gradient_steps"] = max(1, int(round(float(utd) * args.n_envs)))
     if args.resume:
         venv = VecNormalize.load(str(norm_path), venv)
         model = algo.load(args.resume, env=venv, device=args.device, tensorboard_log=str(out))
