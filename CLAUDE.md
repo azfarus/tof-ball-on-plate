@@ -25,7 +25,7 @@ See `docs/ENV.md` for the full env reference. `--set section.key=value` (JSON va
 
 GPU backend notes (2026-11-16):
 - `control/train.py` defaults to `--physics warp`; use `--physics cpu` for the original path.
-- `bop_env/gpu/sim.py` allocates the world batch and runs a 10-substep CUDA graph. The graph is used for batches up to 64 worlds on 8 GiB GPUs and up to 256 worlds on 24 GiB GPUs; larger batches use the same kernels without graph capture.
+- `bop_env/gpu/sim.py` allocates the world batch and runs a 10-substep CUDA graph. The graph is used for batches up to 64 worlds on 8 GiB GPUs and up to 512 worlds on 24 GiB GPUs; larger batches use the same kernels without graph capture.
 - The GPU backend rejects non-empty `[env.randomize]` because it would require rebuilding the MuJoCo model; the current configuration leaves that table empty.
 - The GPU ToF path uses the same 300-ray fan, background map, phase schedule and EKF equations as `bop_env/`. The CPU `Sim` remains the source of truth for scientific comparisons.
 
