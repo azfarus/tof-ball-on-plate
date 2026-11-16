@@ -10,6 +10,7 @@ Usage (from project root):
   .venv/bin/python control/train.py --algo sac --physics cpu --n-envs 14
   .venv/bin/python control/train.py --algo sac --set scan.actuator=ideal
   .venv/bin/python control/train.py --algo sac --net tof   # raw-ToF 3-layer net (tof_net.py)
+  .venv/bin/python control/train.py --algo sac --net res   # wide residual MLP (res_net.py)
   .venv/bin/python control/train.py --resume runs/<run>/final.zip --steps 500000
   .venv/bin/tensorboard --logdir runs
 Weights & Biases logging is on by default ([wandb] in control.toml, --no-wandb to skip).
@@ -21,6 +22,7 @@ import time
 import tomllib
 
 import numpy as np
+import torch
 from stable_baselines3 import A2C, DDPG, PPO, SAC, TD3
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.noise import NormalActionNoise
@@ -29,21 +31,30 @@ from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor, VecNorma
 from bop_env import BallOnPlateEnv, config
 from callbacks import EpisodeStats, RollingCheckpoint, SaveBest
 from evaluate import parse_sets, run_files
+from res_net import ResMLP
 from tof_net import ToFNet
 
 ALGOS = {"ppo": PPO, "sac": SAC, "td3": TD3, "a2c": A2C, "ddpg": DDPG}
 
 
-def hyperparams(algo, hp, net=None):
-    """SB3 kwargs from the [algos.<name>] table (+ [tof_net] if given)."""
+def hyperparams(algo, hp, kind="mlp", net=None):
+    """SB3 kwargs from the [algos.<name>] table, plus [tof_net] or [res_net] for --net tof/res."""
     hp = dict(hp)
     kw = {"policy_kwargs": {"net_arch": hp.pop("net_arch")}}
-    if net is not None:
-        critic = "vf" if algo in ("ppo", "a2c") else "qf"
+    critic = "vf" if algo in ("ppo", "a2c") else "qf"
+    if kind == "tof":
         kw["policy_kwargs"] = {
             "features_extractor_class": ToFNet,
             "features_extractor_kwargs": {"layers": net["layers"], "dropout": net["dropout"]},
             "net_arch": {"pi": net["actor_head"], critic: net["critic_head"]}}
+    elif kind == "res":
+        kw["policy_kwargs"] = {
+            "features_extractor_class": ResMLP,
+            "features_extractor_kwargs": {k: net[k] for k in
+                                          ("width", "blocks", "expansion", "dropout", "keys")},
+            "net_arch": {"pi": net["actor_head"], critic: net["critic_head"]},
+            "optimizer_class": torch.optim.AdamW,
+            "optimizer_kwargs": {"weight_decay": net["weight_decay"]}}
     sigma = hp.pop("action_noise_sigma", None)
     if sigma:
         kw["action_noise"] = NormalActionNoise(np.zeros(3), sigma * np.ones(3))
@@ -69,7 +80,8 @@ def start_wandb(wb, out, args, overrides, ctrl, run_id=None):
                id=run_id, resume="allow" if run_id else None,
                mode=args.wandb_mode, dir=str(out), sync_tensorboard=True, save_code=True,
                config={"args": vars(args), "overrides": overrides,
-                       "algo": ctrl["algos"][args.algo], "tof_net": ctrl["tof_net"]})
+                       "algo": ctrl["algos"][args.algo], "tof_net": ctrl["tof_net"],
+                       "res_net": ctrl["res_net"]})
     return WandbCallback(model_save_path=str(out / "wandb_model"),
                          model_save_freq=wb["model_save_every"] // args.n_envs, verbose=1)
 
@@ -87,8 +99,11 @@ def main():
     ap.add_argument("--steps", type=int, default=tr["total_steps"])
     ap.add_argument("--device", default=tr["device"])
     ap.add_argument("--seed", type=int, default=tr["seed"])
-    ap.add_argument("--net", choices=["mlp", "tof"], default="mlp",
-                    help="mlp: SB3 MLP on all obs; tof: tof_net.py on raw ToF only")
+    ap.add_argument("--net", choices=["mlp", "tof", "res"], default="mlp",
+                    help="mlp: SB3 MLP on all obs; tof: tof_net.py on raw ToF only; "
+                         "res: res_net.py wide residual MLP on all obs")
+    ap.add_argument("--width", type=int, default=None, help="res net width ([res_net])")
+    ap.add_argument("--blocks", type=int, default=None, help="res net residual blocks")
     ap.add_argument("--set", action="append", help="env/sim override section.key=value")
     ap.add_argument("--out", default=None)
     ap.add_argument("--wandb", action=argparse.BooleanOptionalAction,
@@ -99,6 +114,12 @@ def main():
                     help="continue a run from its final.zip or ckpt/<algo>_<n>_steps.zip; "
                          "--steps more steps, same run folder, algo, net and env overrides")
     args = ap.parse_args()
+    torch.backends.cuda.matmul.allow_tf32 = tr["tf32"]  # TF32 tensor cores for the big nets
+    torch.backends.cudnn.allow_tf32 = tr["tf32"]
+    nets = {"tof": dict(ctrl["tof_net"]), "res": dict(ctrl["res_net"])}
+    for k in ("width", "blocks"):
+        if getattr(args, k) is not None:
+            nets["res"][k] = getattr(args, k)
 
     meta = {}
     if args.resume:
@@ -109,7 +130,7 @@ def main():
         if args.n_envs is None:
             args.n_envs = meta["args"].get("n_envs", tr["n_envs"])
     else:
-        net = ctrl["tof_net"] if args.net == "tof" else None
+        net = nets.get(args.net)
         overrides = {**(net["env"] if net else {}), **parse_sets(args.set)}
         out = config.ROOT / (args.out or
                              f"runs/{args.algo}_{args.net}_{time.strftime('%Y%m%d_%H%M%S')}")
@@ -157,8 +178,9 @@ def main():
         venv = VecNormalize(venv, norm_obs=tr["norm_obs"], norm_reward=tr["norm_reward"])
         model = algo("MultiInputPolicy", venv, device=args.device, seed=args.seed,
                      tensorboard_log=str(out), verbose=1,
-                     **hyperparams(args.algo, hp, ctrl["tof_net"]
-                                   if args.net == "tof" else None))
+                     **hyperparams(args.algo, hp, args.net, nets.get(args.net)))
+    n_par = sum(p.numel() for p in model.policy.parameters())
+    print(f"policy parameters (actor + critics + targets): {n_par / 1e6:.1f} M")
     every = max(tr["checkpoint_every"] // args.n_envs, 1)
     ckpt = RollingCheckpoint(tr["keep_last_ckpt"], every, str(out / "ckpt"),
                              name_prefix=args.algo, save_vecnormalize=True,

@@ -13,6 +13,7 @@ physics = "warp"           # "warp" = batched GPU physics; "cpu" = original CPU 
 n_envs = 14                # CPU workers (physics = "cpu")
 warp_envs = 64             # batched GPU worlds (physics = "warp")
 utd = 0.5                  # off-policy gradient updates per environment transition
+tf32 = true                # TF32 tensor-core matmuls (Ampere+): much faster for wide nets
 total_steps = 2_000_000
 device = "cuda"            # NN on the GPU; physics backend is selected by [train].physics
 seed = 0
@@ -86,6 +87,19 @@ critic_head = [256]        # Q head on features + action
 "env.tof_history" = 10     # 100 ms per sensor (100 Hz). No servo state in the input, so the net
                            # infers plate tilt from ball acceleration: needs > ~3 readings per sensor
                            # with the ball in view. Input = 4 x 10 x 7 = 280
+
+[res_net]                  # control/res_net.py, used by train.py --net res (SimBa/BRO-style)
+width = 1024               # residual stream width
+blocks = 4                 # pre-LayerNorm residual blocks: h + Drop(W2 relu(W1 LN(h)))
+expansion = 4              # inner width = expansion x width
+dropout = 0.01             # small dropout in each block (DroQ value)
+weight_decay = 1e-4        # AdamW decoupled weight decay on actor and critic (BRO value)
+keys = []                  # observation keys to use; [] = all (ball_est, tof, servo_cmd, target)
+actor_head = []            # features -> mean/log-std directly
+critic_head = [1024, 1024] # Q head on features + action (action joins after the extractor in SB3)
+
+[res_net.env]              # env overrides for this net (saved in the run's meta.json)
+"env.tof_history" = 10     # 100 ms of raw readings per sensor
 
 [wandb]                    # Weights & Biases logging in train.py (wandb login once first)
 enabled = true             # --no-wandb to skip
