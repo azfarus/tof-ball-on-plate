@@ -5,4 +5,4 @@ njmax = 256                # constraint rows per world
 max_kicks = 64             # kick slots per world and episode (kicks beyond this are dropped)
 # CUDA graph capture of one 10-physics-step block, by GPU memory: [min GiB, max worlds].
 # Bigger batches run the same kernels without the graph.
-graph_worlds = [[0, 64], [12, 256], [20, 512]]
+graph_worlds = [[0, 64], [12, 1024], [20, 4096]]  # RTX 3090: 4096 worlds 10.5k steps/s, 3.7 GB
