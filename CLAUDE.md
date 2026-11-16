@@ -28,6 +28,9 @@ GPU backend notes (2026-11-16):
 - `bop_env/gpu/sim.py` allocates the world batch and runs a 10-substep CUDA graph. The graph is used for batches up to 64 worlds on 8 GiB GPUs and up to 512 worlds on 24 GiB GPUs; larger batches use the same kernels without graph capture.
 - The GPU backend rejects non-empty `[env.randomize]` because it would require rebuilding the MuJoCo model; the current configuration leaves that table empty.
 - The GPU ToF path uses the same 300-ray fan, background map, phase schedule and EKF equations as `bop_env/`. The CPU `Sim` remains the source of truth for scientific comparisons.
+- GPU sizes (contacts, constraints, kick slots, CUDA-graph world limits by GPU memory) are in `config/gpu.toml`.
+- `tools/check_gpu.py` checks GPU against CPU: one EKF update and init, ToF ages (history 10), and a rolling ball with servo scan (path gap and EKF RMSE). Run it after any change in `bop_env/gpu/`.
+- Fixed 2026-11-16 (found by review, all confirmed against CPU): EKF gain used P·H instead of P·Hᵀ (8 mm per update, asymmetric P); EKF init missed the ball radius (20 mm); ToF observation ages never grew; the leg-servo kernel looped over all 7 actuators and wrote past its 3-wide arrays into the next world; range/bearing/push noise repeated every episode per world (now a per-world episode seed); beam pitch sign flipped; `servo_fb` had no noise or feedback-model check.
 
 ## Code style (user rules)
 

@@ -65,7 +65,7 @@ def tof_tick(sim_time: wp.array(dtype=wp.float32),
              pulse_sigma: float, pulse_taps: int, interference: int,
              sensor_near: float, sensor_far: float,
              sensor_near_dist: float, sensor_far_dist: float,
-             foi_half: float, seed: int):
+             foi_half: float, ep_seed: wp.array(dtype=wp.int32)):
     w = wp.tid()
     t = sim_time[w]
     for i in range(ns):
@@ -130,7 +130,7 @@ def tof_tick(sim_time: wp.array(dtype=wp.float32),
                     sig *= wp.sqrt(1.0 + amb_peak / signal)
                     if sig <= sigma_threshold:
                         valid = 1
-                        state = wp.rand_init(seed, w * 1000003 + i * 10007 + old)
+                        state = wp.rand_init(ep_seed[w], i * 10007 + old)
                         rng_range = mean_range + sensor_offset[w, i] + wp.randn(state) * sig
                 rd_valid[w, i] = valid
                 rd_range[w, i] = rng_range

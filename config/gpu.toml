@@ -1,0 +1,8 @@
+# MuJoCo Warp GPU backend (bop_env/gpu/, train.py --physics warp). Not used by the CPU Sim.
+
+nconmax = 64               # contact slots per world
+njmax = 256                # constraint rows per world
+max_kicks = 64             # kick slots per world and episode (kicks beyond this are dropped)
+# CUDA graph capture of one 10-physics-step block, by GPU memory: [min GiB, max worlds].
+# Bigger batches run the same kernels without the graph.
+graph_worlds = [[0, 64], [12, 256], [20, 512]]

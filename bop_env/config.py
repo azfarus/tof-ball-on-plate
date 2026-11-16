@@ -10,7 +10,7 @@ import tomllib
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 CONFIG_DIR = ROOT / "config"
-SECTIONS = ["plate", "sensor", "scan", "tracker", "scenarios", "platform", "servos", "env"]
+SECTIONS = ["plate", "sensor", "scan", "tracker", "scenarios", "platform", "servos", "env", "gpu"]
 
 
 def load(name, config_dir=CONFIG_DIR):

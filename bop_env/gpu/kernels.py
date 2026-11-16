@@ -19,8 +19,9 @@ def rz(a: float) -> wp.mat33f:
 
 @wp.func
 def ry(a: float) -> wp.mat33f:
+    """Beam pitch rotation, + = up (same convention as tof.sensor_frame)."""
     c, s = wp.cos(a), wp.sin(a)
-    return wp.mat33f(c, 0.0, s, 0.0, 1.0, 0.0, -s, 0.0, c)
+    return wp.mat33f(c, 0.0, -s, 0.0, 1.0, 0.0, s, 0.0, c)
 
 
 @wp.func
@@ -101,7 +102,7 @@ def sensor_poses(qpos: wp.array2d(dtype=wp.float32), sim_time: wp.array(dtype=wp
                  sector_deg: float, step_deg: float, reading_time: float,
                  sweep_time: float, phase_scale: float, step_mode: int,
                  scan_servo: int, yaw_measured: int, feedback_noise: float,
-                 mount_height: float, pitch: float, seed: int,
+                 mount_height: float, pitch: float, ep_seed: wp.array(dtype=wp.int32),
                  out_origin: wp.array2d(dtype=wp.vec3f),
                  out_rot: wp.array2d(dtype=wp.mat33f),
                  out_beam: wp.array2d(dtype=wp.float32),
@@ -130,7 +131,7 @@ def sensor_poses(qpos: wp.array2d(dtype=wp.float32), sim_time: wp.array(dtype=wp
         if yaw_measured == 0 or scan_servo == 0:
             out_bearing[w, i] = cmd
         else:
-            state = wp.rand_init(seed, w * 100003 + i * 997 + int(t * 10000.0))
+            state = wp.rand_init(ep_seed[w] + 1, i * 997 + int(t * 10000.0))
             out_bearing[w, i] = beam + wp.randn(state) * feedback_noise
 
 
@@ -203,7 +204,7 @@ def leg_servo_step(qpos: wp.array2d(dtype=wp.float32), qvel: wp.array2d(dtype=wp
                    host_speed: float):
     w = wp.tid()
     t = sim_time[w]
-    for i in range(ctrl.shape[1]):
+    for i in range(qidx.shape[0]):
         if t >= next_frame[w, i] - 1e-9:
             nxt = next_frame[w, i] + frame_dt
             if nxt < t:
@@ -263,12 +264,12 @@ def scan_servo_step(qpos: wp.array2d(dtype=wp.float32), qvel: wp.array2d(dtype=w
 def force_step(qpos: wp.array2d(dtype=wp.float32), xfrc: wp.array2d(dtype=wp.spatial_vectorf),
                sim_time: wp.array(dtype=wp.float32), plate_q: int, ball_body: int,
                push: wp.array2d(dtype=wp.float32), kicks: wp.array3d(dtype=wp.float32),
-               nkicks: wp.array(dtype=wp.int32), dt: float, seed: int,
+               nkicks: wp.array(dtype=wp.int32), dt: float, ep_seed: wp.array(dtype=wp.int32),
                push_sigma: float, push_tau: float):
     w = wp.tid()
     t = sim_time[w]
     if push_sigma > 0.0:
-        state = wp.rand_init(seed, w * 200003 + int(t / dt))
+        state = wp.rand_init(ep_seed[w] + 2, int(t / dt))
         n0 = wp.randn(state)
         n1 = wp.randn(state)
         push[w, 0] = push[w, 0] - push[w, 0] / push_tau * dt + push_sigma * wp.sqrt(2.0 * dt / push_tau) * n0
@@ -378,8 +379,8 @@ def tracker_update(w: int, s: int, valid: int, rng_range: float, sigma: float,
     cx = corner_x[s]
     cy = corner_y[s]
     if ok[w] == 0:
-        x[w, 0] = cx + rng_range * wp.cos(yaw)
-        x[w, 1] = cy + rng_range * wp.sin(yaw)
+        x[w, 0] = cx + (rng_range + R_ball) * wp.cos(yaw)
+        x[w, 1] = cy + (rng_range + R_ball) * wp.sin(yaw)
         x[w, 2] = 0.0
         x[w, 3] = 0.0
         for r in range(4):
@@ -405,14 +406,15 @@ def tracker_update(w: int, s: int, valid: int, rng_range: float, sigma: float,
     p10, p11, p12, p13 = P[w, 4], P[w, 5], P[w, 6], P[w, 7]
     p20, p21, p22, p23 = P[w, 8], P[w, 9], P[w, 10], P[w, 11]
     p30, p31, p32, p33 = P[w, 12], P[w, 13], P[w, 14], P[w, 15]
-    a00 = p00 * h00 + p01 * h10
-    a01 = p00 * h01 + p01 * h11
-    a10 = p10 * h00 + p11 * h10
-    a11 = p10 * h01 + p11 * h11
-    a20 = p20 * h00 + p21 * h10
-    a21 = p20 * h01 + p21 * h11
-    a30 = p30 * h00 + p31 * h10
-    a31 = p30 * h01 + p31 * h11
+    # A = P H^T (4x2); H has nonzero columns 0 and 1 only
+    a00 = p00 * h00 + p01 * h01
+    a01 = p00 * h10 + p01 * h11
+    a10 = p10 * h00 + p11 * h01
+    a11 = p10 * h10 + p11 * h11
+    a20 = p20 * h00 + p21 * h01
+    a21 = p20 * h10 + p21 * h11
+    a30 = p30 * h00 + p31 * h01
+    a31 = p30 * h10 + p31 * h11
     sr = wp.max(sigma, range_floor)
     rb = rx_half(rho, sensor_near, sensor_far, sensor_near_dist, sensor_far_dist)
     sb = (rb + wp.asin(R_ball / rho)) / wp.sqrt(3.0)

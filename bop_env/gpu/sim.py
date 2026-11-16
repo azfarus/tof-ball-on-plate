@@ -19,15 +19,20 @@ class WarpSim(ObservationMixin):
     def __init__(self, cfg, nworld, seed=0, device="cuda:0"):
         wp.set_device(device)
         self.device_obj = wp.get_device(device)
-        mem = self.device_obj.total_memory
-        self.graph_envs = 512 if mem >= 20 * 1024**3 else (256 if mem >= 12 * 1024**3 else 64)
+        self.gcfg = cfg["gpu"]
+        gib = self.device_obj.total_memory / 1024**3
+        self.graph_envs = max(n for g, n in self.gcfg["graph_worlds"] if gib >= g)
         self.cfg, self.b, self.seed, self.device = cfg, nworld, int(seed), device
+        self.np_rng = np.random.default_rng(seed)
         self.plate, self.sc, self.sn, self.pf, self.e = (
             cfg["plate"], cfg["scan"], cfg["sensor"], cfg["platform"], cfg["env"])
         self.leg_spec = servo.spec(cfg["servos"], self.pf["servo_model"], self.pf["supply_v"])
         self.scan_servo = self.sc["actuator"] == "servo"
         self.scan_spec = (servo.spec(cfg["servos"], self.sc["servo_model"], self.sc["supply_v"])
                           if self.scan_servo else None)
+        if self.e["servo_feedback"] and self.leg_spec["feedback"] == "none":
+            raise ValueError(f"servo_feedback needs a feedback servo, not "
+                             f"{self.leg_spec['name']} (try MG996R_FB)")
         self.mjm, _, self.ids = model.build(cfg, self.leg_spec, self.scan_spec)
         self.ns = len(self.sc["corners"])
         self.nray = int(self.sn["n_rays"])
@@ -61,7 +66,8 @@ class WarpSim(ObservationMixin):
 
         self.m = mjw.put_model(self.mjm)
         self.m.opt.warn_overflow = 0
-        self.d = mjw.make_data(self.mjm, nworld=nworld, nconmax=64, njmax=256)
+        self.d = mjw.make_data(self.mjm, nworld=nworld, nconmax=self.gcfg["nconmax"],
+                               njmax=self.gcfg["njmax"])
         self.rc = mjw.create_render_context(self.mjm, nworld=nworld, render_rgb=False,
                                             render_depth=False, enabled_geom_groups=[0, 1, 2])
 
@@ -76,7 +82,7 @@ class WarpSim(ObservationMixin):
         self.max_steps = int(round(self.e["episode_s"] * self.e["control_hz"]))
         self.history = int(self.e["tof_history"])
         self.max_reads = 2 * self.ns + 4
-        self.max_kicks = 64
+        self.max_kicks = self.gcfg["max_kicks"]
         self.k = 0
 
         self._alloc()
@@ -157,6 +163,7 @@ class WarpSim(ObservationMixin):
         self.truth_vel = wp.zeros((b, 3), dtype=wp.float32)
         self.kicks = wp.zeros((b, self.max_kicks, 4), dtype=wp.float32)
         self.nkicks = wp.zeros((b,), dtype=wp.int32)
+        self.ep_seed = wp.zeros((b,), dtype=wp.int32)  # noise stream per world and episode
         self.leg_sent = wp.zeros((b, 3), dtype=wp.float32)
         self.leg_latched = wp.zeros((b, 3), dtype=wp.float32)
         self.leg_next = wp.zeros((b, 3), dtype=wp.float32)
@@ -201,7 +208,7 @@ class WarpSim(ObservationMixin):
         qacc_w = self.d.qacc_warmstart.numpy()
         hist = self.hist_obs.copy()
         kicks = self.kicks.numpy()
-        nkicks = self.nkicks.numpy()
+        nkicks = self.nkicks.numpy(); epseed = self.ep_seed.numpy()
         offs = self.offsets.numpy()
         x = self.x.numpy(); P = self.P.numpy(); ok = self.ok.numpy(); tl = self.tlast.numpy()
         push = self.push.numpy(); esc = self.escaped.numpy(); et = self.escape_t.numpy()
@@ -250,6 +257,7 @@ class WarpSim(ObservationMixin):
             x[w] = 0.0; P[w] = np.eye(4).ravel(); ok[w] = 0; tl[w] = -1e9
             push[w] = 0.0; esc[w] = 0; et[w] = -1.0
             offs[w] = rng.normal(0, self.sn["offset_sigma_m"], self.ns)
+            epseed[w] = rng.integers(0, 2**30)
             kk = disturb.kick_list(self.e["disturb"], rng, self.e["episode_s"])
             nkicks[w] = min(len(kk), self.max_kicks)
             kicks[w] = 0.0
@@ -275,6 +283,7 @@ class WarpSim(ObservationMixin):
         self.scan_latched.assign(scanlatch); self.scan_next.assign(scannext)
         self.scan_sat.assign(scansat); self.hist_obs = hist
         self.kicks.assign(kicks); self.nkicks.assign(nkicks); self.wins.assign(wins)
+        self.ep_seed.assign(epseed)
         self.acc_n.assign(accn); self.acc_yaw.assign(accy); self.acc_beam.assign(accb)
         self.amb.assign(amb); self.hist.assign(hist_gpu); self.finished.assign(finished)
         self.read_count.assign(rc.astype(np.int32))
@@ -369,7 +378,7 @@ class WarpSim(ObservationMixin):
         wp.launch(kernels.force_step, dim=self.b,
                   inputs=[self.d.qpos, self.d.xfrc_applied, self.d.time,
                           self.ids["plate_qpos"], self.ids["ball"], self.push,
-                          self.kicks, self.nkicks, self.dt, self.seed,
+                          self.kicks, self.nkicks, self.dt, self.ep_seed,
                           self.e["disturb"].get("push_sigma_n", 0.0),
                           self.e["disturb"].get("push_tau_s", 0.3)])
         wp.launch(kernels.truth_step, dim=self.b,
@@ -400,7 +409,7 @@ class WarpSim(ObservationMixin):
                           1 if self.scan_servo else 0,
                           1 if self.sc["yaw_source"] == "measured" else 0,
                           np.radians(self.scan_spec["feedback_noise_deg"]) if self.scan_spec else 0.0,
-                          self.mount_height, np.radians(self.sc["pitch_deg"]), self.seed,
+                          self.mount_height, np.radians(self.sc["pitch_deg"]), self.ep_seed,
                           self.sensor_origin, self.sensor_rot, self.sensor_beam,
                           self.sensor_bearing])
         wp.launch(kernels.primary_rays, dim=(self.b, self.ns * self.nray),
@@ -445,7 +454,7 @@ class WarpSim(ObservationMixin):
                           np.radians(self.sn["fov_full_deg_near"] / 2),
                           np.radians(self.sn["fov_full_deg_far"] / 2),
                           float(self.sn["fov_near_m"]), float(self.sn["fov_far_m"]),
-                          np.radians(self.sn["foi_half_deg"]), self.seed])
+                          np.radians(self.sn["foi_half_deg"]), self.ep_seed])
         wp.launch(tof_kernels.tracker_from_readings, dim=self.b,
                   inputs=[self.x, self.P, self.ok, self.tlast, self.finished,
                           self.rd_valid, self.rd_range, self.rd_sigma, self.rd_yaw,

@@ -20,8 +20,15 @@ def _rot(q):
 
 
 class ObservationMixin:
+    def _servo_fb(self, qpos):
+        """Pot reading of the plate servos: horn angle + feedback noise (servo.feedback)."""
+        horn = qpos[:, self.ids["leg_qpos"]] + qpos[:, self.ids["leg_lash"]]
+        noise = np.radians(self.leg_spec["feedback_noise_deg"])
+        return (horn + self.np_rng.normal(0, noise, horn.shape)).astype(np.float32)
+
     def _after(self, rate):
         tm = self.d.time.numpy()
+        self.hist_obs[:, :, :, 6] += self.n_sub * self.dt  # age every kept reading (env._push_readings)
         counts = self.read_count.numpy()
         rv = self.read_valid.numpy(); rs = self.read_sensor.numpy()
         rr = self.read_range.numpy(); rg = self.read_sigma.numpy()
@@ -62,7 +69,7 @@ class ObservationMixin:
                "tof": self.hist_obs.copy(), "servo_cmd": self.action.copy(),
                "target": self.target.copy()}
         if self.e["servo_feedback"]:
-            obs["servo_fb"] = (qpos[:, self.ids["leg_qpos"]] + qpos[:, self.ids["leg_lash"]]).astype(np.float32)
+            obs["servo_fb"] = self._servo_fb(qpos)
         if self.e["plate_pose"]:
             pose = np.stack([np.arctan2(-R[:, 1, 2], R[:, 2, 2]),
                              np.arcsin(np.clip(R[:, 0, 2], -1, 1)),
@@ -84,8 +91,7 @@ class ObservationMixin:
                "tof": self.hist_obs.copy(), "servo_cmd": self.action.copy(),
                "target": self.target.copy()}
         if self.e["servo_feedback"]:
-            qpos = self.d.qpos.numpy()
-            obs["servo_fb"] = (qpos[:, self.ids["leg_qpos"]] + qpos[:, self.ids["leg_lash"]]).astype(np.float32)
+            obs["servo_fb"] = self._servo_fb(self.d.qpos.numpy())
         if self.e["plate_pose"]:
             qpos = self.d.qpos.numpy()
             R = _rot(qpos[:, self.ids["plate_qpos"] + 3:self.ids["plate_qpos"] + 7])
