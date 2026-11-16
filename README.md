@@ -79,7 +79,7 @@ Each run folder `runs/<run>/` holds:
 - `meta.json`, the algo and env overrides;
 - `ckpt/`, the newest 5 checkpoints, one every 200k steps (`keep_last_ckpt`, `checkpoint_every`); older ones are deleted;
 - `best.zip` + `best_vecnormalize.pkl`, the model with the highest mean return over the last 100 training episodes, checked every 20k steps; `best.json` gives its step and return;
-- `replay_buffer.pkl` (SAC, TD3, DDPG only, ~1.4 GB), so a resumed run keeps its experience;
+- `replay_buffer.pkl` (SAC, TD3, DDPG only; about 2.4 KB per transition slot, so a 4M-transition buffer is roughly 9 GB), so a resumed run keeps its experience;
 - the TensorBoard logs and `wandb/`.
 
 Ctrl-C stops training cleanly: it saves `final.zip`, `vecnormalize.pkl` and the replay buffer before exiting.
@@ -97,7 +97,7 @@ Ctrl-C stops training cleanly: it saves `final.zip`, `vecnormalize.pkl` and the 
 - `--steps` is the number of **additional** steps; the step counter continues from the saved model.
 - The algo, net and env overrides come from the run's `meta.json`. `--algo`, `--net` and `--set` are ignored.
 - Output goes to the same run folder: `final.zip` is overwritten and new checkpoints are added. The same W&B run continues, so the curves stay in one chart.
-- A resumed SAC/TD3/DDPG run reloads `replay_buffer.pkl` when it is there. Checkpoints carry no buffer by default (`ckpt_replay_buffer` in `config/control.toml`), so resuming from one refills the buffer from scratch.
+- A resumed SAC/TD3/DDPG run reloads the replay buffer, so the experience collected so far is not lost. A checkpoint has no buffer of its own unless `ckpt_replay_buffer` is on in `config/control.toml`, which costs tens of gigabytes per run, so by default the run's `replay_buffer.pkl` is used instead. If no buffer file exists at all, the run collects `resume_warmup_steps` (100k by default) fresh transitions before it starts updating again, because updating a well-trained policy on a nearly empty buffer destroys it in a few hundred steps.
 
 ## 4. Evaluate
 

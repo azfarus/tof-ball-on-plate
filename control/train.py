@@ -171,13 +171,25 @@ def main():
         if utd is not None:
             hp["gradient_steps"] = max(1, int(round(float(utd) * args.n_envs)))
     hp.update(parse_sets(args.hp))
+    if args.resume and args.hp:
+        print("note: --hp is ignored on --resume, the loaded model keeps its hyperparameters")
     if args.resume:
         venv = VecNormalize.load(str(norm_path), venv)
         model = algo.load(args.resume, env=venv, device=args.device, tensorboard_log=str(out))
-        if off_policy and buf_path.exists():
-            model.load_replay_buffer(str(buf_path))
-        print(f"resumed {args.resume} at {model.num_timesteps} steps"
-              + (f", replay buffer {model.replay_buffer.size()}" if off_policy else ""))
+        buf_note = ""
+        if off_policy:
+            # checkpoints carry no buffer by default, so fall back to the run's final buffer:
+            # training straight after a resume with an empty buffer wrecks the policy
+            if not buf_path.exists():
+                buf_path = out / "replay_buffer.pkl"
+            if buf_path.exists():
+                model.load_replay_buffer(str(buf_path))
+                buf_note = f", replay buffer {model.replay_buffer.size()} from {buf_path.name}"
+            else:
+                warm = tr["resume_warmup_steps"]
+                model.learning_starts = model.num_timesteps + warm
+                buf_note = f", no replay buffer: collecting {warm} steps before updates"
+        print(f"resumed {args.resume} at {model.num_timesteps} steps{buf_note}")
     else:
         venv = VecNormalize(venv, norm_obs=tr["norm_obs"], norm_reward=tr["norm_reward"])
         model = algo("MultiInputPolicy", venv, device=args.device, seed=args.seed,
