@@ -35,11 +35,19 @@ class RollingCheckpoint(CheckpointCallback):
         return ok
 
     def prune(self):
+        """Drop the oldest checkpoint groups, oldest by write time, not by step number.
+
+        Resuming from an older model restarts the step counter, so a new checkpoint
+        can carry a lower number than one written before the resume. Sorting by
+        number would delete it immediately and lose the whole run's checkpoints."""
         files = list(pathlib.Path(self.save_path).glob(f"{self.name_prefix}_*_steps.*"))
         step = lambda f: int(re.search(r"_(\d+)_steps\.", f.name).group(1))
-        steps = sorted({step(f) for f in files})
+        groups = {}
         for f in files:
-            if step(f) in steps[:-self.keep]:
+            groups.setdefault(step(f), []).append(f)
+        newest = lambda s: max(f.stat().st_mtime for f in groups[s])
+        for s in sorted(groups, key=newest)[:-self.keep]:
+            for f in groups[s]:
                 f.unlink()
 
 
